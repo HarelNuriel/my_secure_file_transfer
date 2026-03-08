@@ -4,8 +4,8 @@
 
 #include "client.h"
 
-SOCKET open_client_socket(const char *ip, const int port) {
-    const SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+int open_client_socket(const char *ip, const int port) {
+    const int sock = socket(AF_INET, SOCK_STREAM, TCP);
     struct sockaddr_in sock_addr;
 
     if (sock == INVALID_SOCKET) {
@@ -19,7 +19,7 @@ SOCKET open_client_socket(const char *ip, const int port) {
 
     printf("Connecting to: %s:%d\n", ip, port);
     if (connect(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
-        printf("Error Connecting. ID: %d\n", WSAGetLastError());
+        printf("Error Connecting. ID: %s\n", strerror(errno));
         return INVALID_SOCKET;
     }
 
@@ -35,7 +35,7 @@ void help() {
     printf("%s", help);
 }
 
-void get(const SOCKET sock, const char input[BUFSIZE]) {
+void get(const int sock, const char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     if (file_name == NULL) {
         printf("Invalid Argument.\n");
@@ -43,7 +43,7 @@ void get(const SOCKET sock, const char input[BUFSIZE]) {
     }
 
     if (send(sock, input, (int)strlen(input), 0) == SOCKET_ERROR) {
-        printf("Error sending get. ID: %d\n", WSAGetLastError());
+        printf("Error sending get. ID: %s\n", strerror(errno));
         free(file_name);
         return;
     }
@@ -54,7 +54,7 @@ void get(const SOCKET sock, const char input[BUFSIZE]) {
     free(file_name);
 }
 
-void set(const SOCKET sock, const char input[BUFSIZE]) {
+void set(const int sock, const char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     if (file_name == NULL) {
         printf("Invalid Argument.\n");
@@ -62,7 +62,7 @@ void set(const SOCKET sock, const char input[BUFSIZE]) {
     }
 
     if (send(sock, input, (int)strlen(input), 0) == SOCKET_ERROR) {
-        printf("Error sending get. ID: %d\n", WSAGetLastError());
+        printf("Error sending get. ID: %s\n", strerror(errno));
         free(file_name);
         return;
     }
@@ -74,16 +74,16 @@ void set(const SOCKET sock, const char input[BUFSIZE]) {
 }
 
 // TODO: Fix TCP stream merging
-void list_dir(const SOCKET sock, char input[BUFSIZE]) {
+void list_dir(const int sock, char input[BUFSIZE]) {
     if (send(sock, input, (int)strlen(input), 0) == SOCKET_ERROR) {
-        printf("Error Sending The Command. ID: %d\n", WSAGetLastError());
+        printf("Error Sending The Command. ID: %s\n", strerror(errno));
         return;
     }
 
     char buffer[BUFSIZE];
-    int size;
+    ssize_t size;
     if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
-        printf("Error Receiving The Number Of Files. ID: %d\n", WSAGetLastError());
+        printf("Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
         return;
     }
 
@@ -93,10 +93,10 @@ void list_dir(const SOCKET sock, char input[BUFSIZE]) {
     }
 
     buffer[size] = '\0';
-    const int file_num = strtol(buffer, NULL, 10);
+    const long file_num = strtol(buffer, NULL, 10);
     for (int i = 0; i < file_num; i++) {
         if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
-            printf("Error Receiving The File's Name. ID: %d\n", WSAGetLastError());
+            printf("Error Receiving The File's Name. ID: %s\n", strerror(errno));
             return;
         }
         if (size >= BUFSIZE) {
@@ -107,10 +107,10 @@ void list_dir(const SOCKET sock, char input[BUFSIZE]) {
         printf("%s\n", buffer);
     }
 
-    printf("\nListed %d Files.", file_num);
+    printf("\nListed %ld Files.", file_num);
 }
 
-int process_cmd(char input[BUFSIZE], const SOCKET sock) {
+int process_cmd(char input[BUFSIZE], const int sock) {
     char *cmd = get_method(input);
     if (cmd == NULL) {
         printf("Invalid Command.\n");
@@ -128,14 +128,14 @@ int process_cmd(char input[BUFSIZE], const SOCKET sock) {
     } else if (strcmp(cmd, "exit") == 0) {
         free(cmd);
         if (send(sock, "exit\0", (int)strlen("exit\0"), 0) == SOCKET_ERROR) {
-            printf("Error sending the data. ID: %d\n", WSAGetLastError());
+            printf("Error sending the data. ID: %s\n", strerror(errno));
             return 1;
         }
         return 0;
     } else if (strcmp(cmd, "shutdown") == 0) {
         free(cmd);
         if (send(sock, "shutdown\0", (int)strlen("shutdown\0"), 0) == SOCKET_ERROR) {
-            printf("Error sending the data. ID: %d\n", WSAGetLastError());
+            printf("Error sending the data. ID: %s\n", strerror(errno));
             return 1;
         }
         return 0;
@@ -147,7 +147,7 @@ int process_cmd(char input[BUFSIZE], const SOCKET sock) {
     return 1;
 }
 
-void session(const SOCKET sock) {
+void session(const int sock) {
     char buffer [BUFSIZE] = {0};
     int flag = 1;
 
@@ -159,14 +159,6 @@ void session(const SOCKET sock) {
 }
 
 void client(char *ip, int port) {
-    struct WSAData wsa_data;
-    const int ret = WSAStartup(MAKEWORD(2, 2), &wsa_data);
-
-    if (ret != 0) {
-        printf("WSAStartup failed: %d\n", ret);
-        return;
-    }
-
     if (ip == NULL) {
         ip = IP;
     }
@@ -176,12 +168,11 @@ void client(char *ip, int port) {
 
     // TODO: Implement login.
 
-    const SOCKET sock = open_client_socket(ip, port);
+    const int sock = open_client_socket(ip, port);
 
     printf("Session started with host: %s\n", ip);
 
     session(sock);
 
-    closesocket(sock);
-    WSACleanup();
+    close(sock);
 }

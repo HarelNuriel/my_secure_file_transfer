@@ -6,8 +6,6 @@
 #ifndef SECURE_FILE_TRANSFER_CLIENT_H
 #define SECURE_FILE_TRANSFER_CLIENT_H
 
-#include <stdio.h>
-#include <winsock2.h>
 #include "common_utils.h"
 
 #define BUFSIZE 1024

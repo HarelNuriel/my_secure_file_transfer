@@ -76,7 +76,7 @@ long get_file_size(const char *file_name) {
         return -1;
     }
 
-    int size = 0;
+    long size = 0;
     if (fseek(fp, 0, SEEK_END) == 0) {
         size = ftell(fp);
     }
@@ -85,7 +85,7 @@ long get_file_size(const char *file_name) {
     return size;
 }
 
-int send_file(const SOCKET sock, const char *file_name) {
+int send_file(const int sock, const char *file_name) {
     long size = get_file_size(file_name);
     char buffer[BUFSIZE], s_size[BUFSIZE];
     FILE *fp = fopen(file_name, "rb");
@@ -101,7 +101,7 @@ int send_file(const SOCKET sock, const char *file_name) {
     const long len = sprintf(s_size, "%ld", size);
 
     if (send(sock, s_size, len, 0) ==  SOCKET_ERROR) {
-        printf("Error Sending The File Size. ID: %d\n", WSAGetLastError());
+        printf("Error Sending The File Size. ID: %s\n", strerror(errno));
         return 0;
     }
 
@@ -109,7 +109,7 @@ int send_file(const SOCKET sock, const char *file_name) {
     for (; size > BUFSIZE; size -= BUFSIZE) {
         if (fread(buffer, sizeof(char), BUFSIZE, fp)) {
             if (send(sock, buffer, BUFSIZE, 0) == SOCKET_ERROR) {
-                printf("Error Sending The File. ID: %d\n", WSAGetLastError());
+                printf("Error Sending The File. ID: %s\n", strerror(errno));
                 return 0;
             }
         }
@@ -118,7 +118,7 @@ int send_file(const SOCKET sock, const char *file_name) {
     if (size > 0) {
         if (fread(buffer, sizeof(char), size, fp)) {
             if (send(sock, buffer, size, 0) == SOCKET_ERROR) {
-                printf("Error Sending The File. ID: %d\n", WSAGetLastError());
+                printf("Error Sending The File. ID: %s\n", strerror(errno));
                 return 0;
             }
         }
@@ -131,10 +131,10 @@ int send_file(const SOCKET sock, const char *file_name) {
     return 1;
 }
 
-int recv_file(const SOCKET sock, const char *file_name) {
+int recv_file(const int sock, const char *file_name) {
     FILE *fp = fopen(file_name, "wb");
     char buffer [BUFSIZE];
-    int size;
+    ssize_t size;
 
     if (fp == NULL) {
         printf("Error opening the file.\n");
@@ -153,7 +153,6 @@ int recv_file(const SOCKET sock, const char *file_name) {
     buffer[size] = '\0';
     long len = strtol(buffer, NULL, 10);
 
-    size = 0;
     for (; len > BUFSIZE; len -= size) {
         if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
             printf("Error Receiving File Data.");
@@ -176,7 +175,7 @@ int recv_file(const SOCKET sock, const char *file_name) {
     return 1;
 }
 
-void free_double_pointer(char** arr, int length) {
+void free_double_pointer(char** arr, const int length) {
     for (int i = 0; i < length; i++) {
         free(arr[i]);
     }

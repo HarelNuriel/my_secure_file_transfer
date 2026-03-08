@@ -1,7 +1,7 @@
 #include "server.h"
 
-SOCKET open_server_socket(const int port) {
-    const SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+int open_server_socket(const int port) {
+    const int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sock_addr = {0};
 
     if (sock == INVALID_SOCKET) {
@@ -13,7 +13,7 @@ SOCKET open_server_socket(const int port) {
     sock_addr.sin_port = htons(port);
     sock_addr.sin_addr.s_addr = inet_addr(IP);
 
-    if (bind(sock, (SOCKADDR*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
+    if (bind(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
         printf(("Error Binding.\n"));
         return INVALID_SOCKET;
     }
@@ -27,7 +27,7 @@ SOCKET open_server_socket(const int port) {
     return sock;
 }
 
-void recv_file_from_client(const SOCKET sock, char input[BUFSIZE]) {
+void recv_file_from_client(const int sock, char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     if (file_name == NULL) {
         printf("Failed To Get The Argument.\n");
@@ -40,7 +40,7 @@ void recv_file_from_client(const SOCKET sock, char input[BUFSIZE]) {
     free(file_name);
 }
 
-void send_file_to_client(const SOCKET sock, char input[BUFSIZE]) {
+void send_file_to_client(const int sock, char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     if (file_name == NULL) {
         printf("Failed To Get The Argument.\n");
@@ -54,44 +54,25 @@ void send_file_to_client(const SOCKET sock, char input[BUFSIZE]) {
 }
 
 char* get_path(const char* dir) {
-    char *path = malloc(sizeof(char) * BUFSIZE);
-    DWORD ret = GetCurrentDirectory(BUFSIZE, path);
-    if (ret == 0) {
-        printf("Getting Directory Name Failed (1).\n");
-        free(path);
-        return NULL;
-    }
-    if (ret > BUFSIZE) {
-        char *temp = realloc(path, sizeof(char) * ret);
-        if (temp == NULL) {
-            printf("Error Reallocating Memory.\n");
-            free(path);
-            return NULL;
-        }
-        path = temp;
-    }
-    ret = GetCurrentDirectory(ret, path);
-    if (ret == 0) {
-        printf("Getting Directory Name Failed (1).\n");
-        free(path);
+    char *cwd = getcwd(NULL, 0);
+    if (cwd == NULL) {
         return NULL;
     }
 
-    long path_len = ret + strlen(dir) + 4;
-    if (path_len > BUFSIZE) {
-        char *temp = realloc(path, sizeof(char) * (path_len + 1));
-        if (temp == NULL) {
-            free(path);
-            printf("Error Reallocating Memory.\n");
-            return NULL;
-        }
-        path = temp;
+    const size_t dir_len = strlen(cwd) + strlen(dir) + 4;
+    char *full_dir = malloc(sizeof(char) * dir_len);
+    if (full_dir == NULL) {
+        return NULL;
     }
-    strcat(path, "\\");
-    strcat(path, dir);
-    strcat(path, "\\*");
+    memset(full_dir, 0, dir_len);
 
-    return path;
+    strcat(full_dir, cwd);
+    strcat(full_dir, "/");
+    strcat(full_dir, dir);
+    strcat(full_dir, "/\0");
+
+    free(cwd);
+    return full_dir;
 }
 
 char** get_dir_file_list(const char* dir, int *length) {
@@ -105,93 +86,94 @@ char** get_dir_file_list(const char* dir, int *length) {
         return NULL;
     }
     if (path == NULL) {
+        printf("Error Allocating Memory (2).\n");
         free(files);
         return NULL;
     }
 
-    WIN32_FIND_DATA file_data;
-    HANDLE file_handle = FindFirstFile(path, &file_data);
-    if (file_handle == INVALID_HANDLE_VALUE) {
-        printf("Error: Could Not Open Directory.\n");
-        free_double_pointer(files, *length);
+    DIR* d = opendir(path);
+    struct dirent *entry;
+    if (d == NULL) {
+        printf("Error Opening Path. ID: %s", strerror(errno));
         free(path);
+        free(files);
         return NULL;
     }
-
-    files[(*length)] = malloc(sizeof(char) * (strlen(file_data.cFileName) + 1));
-    if (files[*length] == NULL) {
-        printf("Error Allocating Memory (2).\n");
-        free_double_pointer(files, *length);
-        free(path);
-        FindClose(file_handle);
-        return NULL;
-    }
-    strcpy(files[(*length)++], file_data.cFileName);
 
     int i = 1;
-    while (FindNextFile(file_handle, &file_data) != 0) {
+    char **temp;
+    while ((entry = readdir(d)) != NULL) {
         if (*length >= MIN_FILES * i) {
             i++;
-            char **f_temp = realloc(files, sizeof(char *) * (MIN_FILES * i));
-            if (f_temp == NULL) {
-                free_double_pointer(files, *length);
+            temp = realloc(files, sizeof(char*) * MIN_FILES * i);
+            if (temp == NULL) {
+                printf("Error Reallocating Memory. ID: %s", strerror(errno));
                 free(path);
-                printf("Memory Reallocation Error.\n");
-                FindClose(file_handle);
+                free_double_pointer(files, *length);
                 return NULL;
             }
-            files = f_temp;
+            files = temp;
         }
-        files[(*length)] = malloc(sizeof(char) * (strlen(file_data.cFileName) + 1));
-        if (files[*length] == NULL) {
-            printf("Error Allocating Memory (3).\n");
-            free_double_pointer(files, *length);
-            free(path);
-            FindClose(file_handle);
-            return NULL;
-        }
-        strcpy(files[(*length)++], file_data.cFileName);
+        files[*length] = malloc(sizeof(char) * strlen(entry->d_name) + 1);
+        strcpy(files[(*length)++], entry->d_name);
     }
 
-    FindClose(file_handle);
+    closedir(d);
     free(path);
     return files;
 }
 
 // TODO: Fix TCP stream merging
-void ls(SOCKET sock, char input[BUFSIZE]) {
-    int num_of_files, len;
-    const char *dir = get_arg(input);
+void ls(const int sock, char input[BUFSIZE]) {
+    int num_of_files, flag = -1, len;
+    char *dir = get_arg(input);
     if (dir == NULL) {
         dir = ".";
+        flag = 0;
     }
     char **files = get_dir_file_list(dir, &num_of_files), buffer[BUFSIZE];
+    if (files == NULL) {
+        printf("Error Allocating Memory (2).\n");
+        if (flag != 0) {
+            free(dir);
+        }
+        return;
+    }
 
     len = sprintf(buffer, "%d", num_of_files);
     if (send(sock, buffer, len, 0) == SOCKET_ERROR) {
-        printf("Error Sending The Number Of Files. ID: %d", WSAGetLastError());
+        printf("Error Sending The Number Of Files. ID: %s", strerror(errno));
         free_double_pointer(files, num_of_files);
+        if (flag != 0) {
+            free(dir);
+        }
         return;
     }
 
     for (int i = 0; i < num_of_files; i++) {
         if (send(sock, files[i], (int)strlen(files[i]), 0) == SOCKET_ERROR) {
-            printf("Error Sending The Files Names. ID: %d", WSAGetLastError());
+            printf("Error Sending The Files Names. ID: %s", strerror(errno));
             free_double_pointer(files, num_of_files);
+            if (flag != 0) {
+                free(dir);
+            }
             return;
         }
     }
 
     free_double_pointer(files, num_of_files);
+    if (flag != 0) {
+        free(dir);
+    }
 }
 
-int read_socket(const SOCKET sock) {
+int read_socket(const int sock) {
     char buffer [BUFSIZE];
-    int len;
+    ssize_t len;
 
     while (1) {
         if ((len = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
-            printf("Error receiving data. Error id: %d\n", WSAGetLastError());
+            printf("Error receiving data. Error id: %s\n", strerror(errno));
             continue;
         }
         if (len == 0) {
@@ -199,6 +181,7 @@ int read_socket(const SOCKET sock) {
         }
 
         char *method;
+        // TODO: Accept commands larger than BUFSIZE.
         if (len < BUFSIZE) {
             buffer[len] = '\0';
             printf("Received command: %s\n", buffer);
@@ -222,6 +205,7 @@ int read_socket(const SOCKET sock) {
             free(method);
             return 0;
         } else if (strcmp(method, "shutdown") == 0) {
+            free(method);
             return -1;
         } else {
             printf("Unknown Command.\n");
@@ -233,22 +217,13 @@ int read_socket(const SOCKET sock) {
 
 
 void server(int port) {
-    struct WSAData wsa_data;
-    const int ret = WSAStartup(MAKEWORD(2, 2), &wsa_data);
-
-    if (ret != 0) {
-        printf("WSAStartup failed: %d\n", ret);
-        return;
-    }
-
     if (port == 0) {
         port = PORT;
     }
-    const SOCKET sock = open_server_socket(port);
-    SOCKET client = INVALID_SOCKET;
+    const int sock = open_server_socket(port);
+    int client = INVALID_SOCKET;
     if (sock == INVALID_SOCKET) {
         printf("Error Setting Up The Socket\n");
-        WSACleanup();
         return;
     }
 
@@ -262,11 +237,10 @@ void server(int port) {
         // TODO: auth client and start secure session.
         flag = read_socket(client);
         if (flag == -1) {
-            closesocket(sock);
-            closesocket(client);
-            WSACleanup();
+            close(sock);
+            close(client);
             break;
         }
-        closesocket(client);
+        close(client);
     }
 }

@@ -6,10 +6,8 @@
 #ifndef SECURE_FILE_TRANSFER_SERVER_H
 #define SECURE_FILE_TRANSFER_SERVER_H
 
-#include <stdio.h>
-#include <winsock2.h>
 #include "common_utils.h"
-#include <windows.h>
+#include <dirent.h>
 
 #define BUFSIZE 1024
 #define IP "127.0.0.1\0"
