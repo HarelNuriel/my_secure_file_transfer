@@ -18,11 +18,11 @@ int open_server_socket(const int port) {
         return INVALID_SOCKET;
     }
 
-    printf("Listening on %d\n", port);
     if (listen(sock, 1) == SOCKET_ERROR) {
         printf(("Error Listening.\n"));
         return INVALID_SOCKET;
     }
+    printf("Listening on %d\n", port);
 
     return sock;
 }

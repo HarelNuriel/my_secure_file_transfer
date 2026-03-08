@@ -56,3 +56,13 @@ dkms.conf
 
 # other
 cmake-build-debug/
+test/test_files/
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
+.ninja*
+build.ninja
+compile_commands.json
+
+# Currently no changes to makefile
+Makefile
