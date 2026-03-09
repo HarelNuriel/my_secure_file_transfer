@@ -94,6 +94,7 @@ void list_dir(const int sock, char input[BUFSIZE]) {
 
     buffer[size] = '\0';
     const long file_num = strtol(buffer, NULL, 10);
+    printf("Printing %ld files.", file_num);
     for (int i = 0; i < file_num; i++) {
         if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
             printf("Error Receiving The File's Name. ID: %s\n", strerror(errno));

@@ -2,8 +2,9 @@ name: my_secure_file_transfer
 
 services:
   server:
+    image: msft
     build:
-      context: .
+      context: test
       dockerfile: Dockerfile
     ports:
       - "4444:4444"

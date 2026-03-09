@@ -16,8 +16,9 @@ echo "Done."
 echo "Setting up the server's docker."
 docker stop my_secure_file_transfer-server-1
 docker rm my_secure_file_transfer-server-1
-docker build ./test/
-docker-compose -f ./test/compose.yaml up -d
+docker image rm msft
+docker build . --tag=msft
+docker-compose -f ./compose.yaml up -d
 echo "Done."
 
 echo "Running the client."
