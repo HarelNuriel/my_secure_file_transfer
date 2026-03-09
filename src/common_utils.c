@@ -181,3 +181,17 @@ void free_double_pointer(char** arr, const int length) {
     }
     free(arr);
 }
+
+void write_log(const char *path, char *msg) {
+    FILE *fp = fopen(path, "a");
+    if (fp == NULL) {
+        printf("Error opening server.log");
+        return;
+    }
+
+    if (fprintf(fp, "%s", msg) == -1) {
+        printf("Error writing to server.log");
+    }
+
+    fclose(fp);
+}

@@ -63,6 +63,7 @@ CMakeFiles
 .ninja*
 build.ninja
 compile_commands.json
+log/
 
 # Currently no changes to makefile
 Makefile

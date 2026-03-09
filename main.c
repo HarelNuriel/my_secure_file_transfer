@@ -54,15 +54,11 @@ int main(const int argc, char **argv) {
     char *ip = handle_flags(&port, argv, argc);
 
     if (strcmp(argv[1], "server") == 0) {
-        server(port);
+        server(ip, port);
     } else if (strcmp(argv[1], "client") == 0) {
         client(ip, port);
     } else {
         printf("Error: Invalid mode.\n\n%s", help);
-    }
-
-    if (ip != NULL) {
-        free(ip);
     }
 
     return 0;

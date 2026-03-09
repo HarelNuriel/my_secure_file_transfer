@@ -8,12 +8,12 @@
 
 #include "common_utils.h"
 #include <dirent.h>
+#include <sys/stat.h>
 
-#define BUFSIZE 1024
-#define IP "127.0.0.1\0"
-#define PORT 1234
 #define MIN_FILES 16
+#define LOG_PATH "/var/log/server/"
+#define LOG_FILE "server.log"
 
-void server(int port);
+void server(char *ip, int port);
 
 #endif //SECURE_FILE_TRANSFER_SERVER_H

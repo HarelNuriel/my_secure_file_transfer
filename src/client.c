@@ -174,5 +174,6 @@ void client(char *ip, int port) {
 
     session(sock);
 
+    free(ip);
     close(sock);
 }

@@ -1,59 +1,71 @@
 #include "server.h"
 
-int open_server_socket(const int port) {
+int open_server_socket(const int port, const char *ip, const char *log_file_path) {
+    char msg[BUFSIZE];
     const int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sock_addr = {0};
 
     if (sock == INVALID_SOCKET) {
-        printf("Error at socket call.\n");
+        snprintf(msg, BUFSIZE, "Error at socket call.\n");
+        write_log(log_file_path, msg);
         return INVALID_SOCKET;
     }
 
     sock_addr.sin_family = AF_INET;
     sock_addr.sin_port = htons(port);
-    sock_addr.sin_addr.s_addr = inet_addr(IP);
+    sock_addr.sin_addr.s_addr = inet_addr(ip);
 
     if (bind(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
-        printf(("Error Binding.\n"));
+        snprintf(msg, BUFSIZE, "Error Binding. ID: %s\n", strerror(errno));
+        write_log(log_file_path, msg);
         return INVALID_SOCKET;
     }
 
     if (listen(sock, 1) == SOCKET_ERROR) {
-        printf(("Error Listening.\n"));
+        snprintf(msg, BUFSIZE, "Error Listening.\n");
+        write_log(log_file_path, msg);
         return INVALID_SOCKET;
     }
-    printf("Listening on %d\n", port);
+    snprintf(msg, BUFSIZE, "Listening on %d\n", port);
+    write_log(log_file_path, msg);
 
     return sock;
 }
 
-void recv_file_from_client(const int sock, char input[BUFSIZE]) {
+void recv_file_from_client(const int sock, char input[BUFSIZE], const char *log_file_path) {
+    char msg[BUFSIZE];
     char *file_name = get_arg(input);
     if (file_name == NULL) {
-        printf("Failed To Get The Argument.\n");
+        snprintf(msg, BUFSIZE, "Failed To Get The Argument.\n");
+        write_log(log_file_path, msg);
         return;
     }
 
-    printf("Writing To: %s.\n", file_name);
+    snprintf(msg, BUFSIZE, "Writing To: %s.\n", file_name);
+    write_log(log_file_path, msg);
     recv_file(sock, file_name);
 
     free(file_name);
 }
 
-void send_file_to_client(const int sock, char input[BUFSIZE]) {
+void send_file_to_client(const int sock, char input[BUFSIZE], const char *log_file_path) {
+    char msg[BUFSIZE];
     char *file_name = get_arg(input);
     if (file_name == NULL) {
-        printf("Failed To Get The Argument.\n");
+        snprintf(msg, BUFSIZE, "Failed To Get The Argument.\n");
+        write_log(log_file_path, msg);
         return;
     }
 
-    printf("Reading %s.\n", file_name);
+    snprintf(msg, BUFSIZE, "Reading %s.\n", file_name);
+    write_log(log_file_path, msg);
     send_file(sock, file_name);
 
     free(file_name);
 }
 
-char* get_path(const char* dir) {
+char* get_path(const char* dir, const char *log_file_path) {
+    char msg[BUFSIZE];
     char *cwd = getcwd(NULL, 0);
     if (cwd == NULL) {
         return NULL;
@@ -75,18 +87,21 @@ char* get_path(const char* dir) {
     return full_dir;
 }
 
-char** get_dir_file_list(const char* dir, int *length) {
-    char *path = get_path(dir), **files = malloc(sizeof(char*) * MIN_FILES);
+char** get_dir_file_list(const char* dir, int *length, const char *log_file_path) {
+    char msg[BUFSIZE];
+    char *path = get_path(dir, log_file_path), **files = malloc(sizeof(char*) * MIN_FILES);
     *length = 0;
     if (files == NULL) {
         if (path != NULL) {
             free(path);
         }
-        printf("Error Allocating Memory (1).\n");
+        snprintf(msg, BUFSIZE, "Error Allocating Memory (1).\n");
+        write_log(log_file_path, msg);
         return NULL;
     }
     if (path == NULL) {
-        printf("Error Allocating Memory (2).\n");
+        snprintf(msg, BUFSIZE, "Error Allocating Memory (2).\n");
+        write_log(log_file_path, msg);
         free(files);
         return NULL;
     }
@@ -94,7 +109,8 @@ char** get_dir_file_list(const char* dir, int *length) {
     DIR* d = opendir(path);
     struct dirent *entry;
     if (d == NULL) {
-        printf("Error Opening Path. ID: %s", strerror(errno));
+        snprintf(msg, BUFSIZE, "Error Opening Path. ID: %sn", strerror(errno));
+        write_log(log_file_path, msg);
         free(path);
         free(files);
         return NULL;
@@ -107,7 +123,8 @@ char** get_dir_file_list(const char* dir, int *length) {
             i++;
             temp = realloc(files, sizeof(char*) * MIN_FILES * i);
             if (temp == NULL) {
-                printf("Error Reallocating Memory. ID: %s", strerror(errno));
+                snprintf(msg, BUFSIZE, "Error Reallocating Memory. ID: %s\n", strerror(errno));
+                write_log(log_file_path, msg);
                 free(path);
                 free_double_pointer(files, *length);
                 return NULL;
@@ -124,16 +141,18 @@ char** get_dir_file_list(const char* dir, int *length) {
 }
 
 // TODO: Fix TCP stream merging
-void ls(const int sock, char input[BUFSIZE]) {
+void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
+    char msg[BUFSIZE];
     int num_of_files, flag = -1, len;
     char *dir = get_arg(input);
     if (dir == NULL) {
         dir = ".";
         flag = 0;
     }
-    char **files = get_dir_file_list(dir, &num_of_files), buffer[BUFSIZE];
+    char **files = get_dir_file_list(dir, &num_of_files, log_file_path), buffer[BUFSIZE];
     if (files == NULL) {
-        printf("Error Allocating Memory (2).\n");
+        snprintf(msg, BUFSIZE, "Error Allocating Memory (2).\n");
+        write_log(log_file_path, msg);
         if (flag != 0) {
             free(dir);
         }
@@ -142,7 +161,8 @@ void ls(const int sock, char input[BUFSIZE]) {
 
     len = sprintf(buffer, "%d", num_of_files);
     if (send(sock, buffer, len, 0) == SOCKET_ERROR) {
-        printf("Error Sending The Number Of Files. ID: %s", strerror(errno));
+        snprintf(msg, BUFSIZE, "Error Sending The Number Of Files. ID: %s\n", strerror(errno));
+        write_log(log_file_path, msg);
         free_double_pointer(files, num_of_files);
         if (flag != 0) {
             free(dir);
@@ -151,8 +171,11 @@ void ls(const int sock, char input[BUFSIZE]) {
     }
 
     for (int i = 0; i < num_of_files; i++) {
+        snprintf(msg, BUFSIZE, "Sending: %s\n", files[i]);
+        write_log(log_file_path, msg);
         if (send(sock, files[i], (int)strlen(files[i]), 0) == SOCKET_ERROR) {
-            printf("Error Sending The Files Names. ID: %s", strerror(errno));
+            snprintf(msg, BUFSIZE, "Error Sending The Files Names. ID: %s\n", strerror(errno));
+            write_log(log_file_path, msg);
             free_double_pointer(files, num_of_files);
             if (flag != 0) {
                 free(dir);
@@ -167,13 +190,15 @@ void ls(const int sock, char input[BUFSIZE]) {
     }
 }
 
-int read_socket(const int sock) {
+int read_socket(const int sock, const char *log_file_path) {
     char buffer [BUFSIZE];
+    char msg [BUFSIZE];
     ssize_t len;
 
     while (1) {
         if ((len = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
-            printf("Error receiving data. Error id: %s\n", strerror(errno));
+            snprintf(msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
+            write_log(log_file_path, msg);
             continue;
         }
         if (len == 0) {
@@ -184,23 +209,25 @@ int read_socket(const int sock) {
         // TODO: Accept commands larger than BUFSIZE.
         if (len < BUFSIZE) {
             buffer[len] = '\0';
-            printf("Received command: %s\n", buffer);
+            snprintf(msg, BUFSIZE, "Received command: %s\n", buffer);
+            write_log(log_file_path, msg);
             method = get_method(buffer);
         } else {
             continue;
         }
 
         if (method == NULL) {
-            printf("Unknown Command.\n");
+            snprintf(msg, BUFSIZE, "Unknown Command.\n");
+            write_log(log_file_path, msg);
             continue;
         }
 
         if (strcmp(method, "get") == 0) {
-            send_file_to_client(sock, buffer);
+            send_file_to_client(sock, buffer, log_file_path);
         } else if (strcmp(method, "set") == 0) {
-            recv_file_from_client(sock, buffer);
+            recv_file_from_client(sock, buffer, log_file_path);
         } else if (strcmp(method, "ls") == 0) {
-            ls(sock, buffer);
+            ls(sock, buffer, log_file_path);
         } else if (strcmp(method, "exit") == 0) {
             free(method);
             return 0;
@@ -216,14 +243,48 @@ int read_socket(const int sock) {
 }
 
 
-void server(int port) {
+void server(char *ip, int port) {
+    char *log_file_path = malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
+    strcpy(log_file_path, LOG_PATH);
+    strcat(log_file_path, LOG_FILE);
+    if (access(log_file_path, F_OK) != 0) {
+        DIR *d = opendir(LOG_PATH);
+        if (d == NULL) {
+            if (mkdir(LOG_PATH, 755) != 0) {
+                printf("Error creating %s, ID: %s", LOG_PATH, strerror(errno));
+                free(log_file_path);
+                return;
+            }
+            FILE *fp = fopen(log_file_path, "w");
+            if (fp == NULL) {
+                printf("Error creating %s, ID: %s", log_file_path, strerror(errno));
+                free(log_file_path);
+                return;
+            }
+            fclose(fp);
+        }
+        closedir(d);
+    }
+
     if (port == 0) {
         port = PORT;
     }
-    const int sock = open_server_socket(port);
+    if (ip == NULL) {
+        ip = malloc(sizeof(char) * strlen(IP) + 1);
+        if (ip == NULL) {
+            write_log(log_file_path, "Error Allocating ip Memory.\n");
+            free(log_file_path);
+            return;
+        }
+        strcpy(ip, IP);
+    }
+    const int sock = open_server_socket(port, ip, log_file_path);
     int client = INVALID_SOCKET;
+    free(ip);
+
     if (sock == INVALID_SOCKET) {
-        printf("Error Setting Up The Socket\n");
+        write_log(log_file_path, "Error Setting Up The Socket\n");
+        free(log_file_path);
         return;
     }
 
@@ -231,12 +292,13 @@ void server(int port) {
     while (1) {
         client = accept(sock, NULL, NULL);
         if (client == SOCKET_ERROR) {
-            printf("Client Socket Error.\n");
+            write_log(log_file_path,"Client Socket Error.\n");
             continue;
         }
         // TODO: auth client and start secure session.
-        flag = read_socket(client);
+        flag = read_socket(client, log_file_path);
         if (flag == -1) {
+            free(log_file_path);
             close(sock);
             close(client);
             break;

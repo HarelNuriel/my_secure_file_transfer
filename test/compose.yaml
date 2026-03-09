@@ -6,10 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "1234:1234"
+      - "4444:4444"
     networks:
       static_network:
         ipv4_address: 10.5.0.10
+    volumes:
+      - ./log/:/var/log/server
 
 networks:
   static_network:
