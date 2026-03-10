@@ -119,6 +119,9 @@ ssize_t recv_packet(const int sock, char *buffer) {
             printf("Error receiving the packet. ID: %s\n", strerror(errno));
             return SOCKET_ERROR;
         }
+        if (pkt_size == 0) {
+            return 0;
+        }
         temp += pkt_size;
         size -= pkt_size;
     }
@@ -222,16 +225,14 @@ void free_double_pointer(char** arr, const int length) {
     free(arr);
 }
 
-void write_log(const char *path, char *msg) {
-    FILE *fp = fopen(path, "a");
+void write_log(char *msg) {
+    FILE *fp = log_stream == NULL ? stdout : log_stream;
     if (fp == NULL) {
-        printf("Error opening server.log");
         return;
     }
+    fprintf(fp, "%s", msg);
+}
 
-    if (fprintf(fp, "%s", msg) == -1) {
-        printf("Error writing to server.log");
-    }
-
-    fclose(fp);
+void set_log_stream(FILE *stream) {
+    log_stream = stream;
 }

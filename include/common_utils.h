@@ -28,8 +28,11 @@ long get_file_size(const char *file_name);
 int send_file(int sock, const char *file_name);
 int recv_file(int sock, const char *file_name);
 void free_double_pointer(char** arr, int length);
-void write_log(const char *path, char *msg);
-ssize_t recv_packet(const int sock, char *buffer);
-int send_packet(const int sock, const char *buffer, const unsigned int length);
+void write_log(char *msg);
+ssize_t recv_packet(int sock, char *buffer);
+int send_packet(int sock, const char *buffer, unsigned int length);
+void set_log_stream(FILE *stream);
+
+static FILE *log_stream = NULL;
 
 #endif //SECURE_FILE_TRANSFER_COMMON_UTILS_H

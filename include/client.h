@@ -10,4 +10,7 @@
 
 void client(char *ip, int port);
 
+static char log_msg[BUFSIZE] = {0};
+static char buffer[BUFSIZE] = {0};
+
 #endif //SECURE_FILE_TRANSFER_CLIENT_H

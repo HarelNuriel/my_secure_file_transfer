@@ -1,13 +1,12 @@
 #include "server.h"
 
-int open_server_socket(const int port, const char *ip, const char *log_file_path) {
-    char msg[BUFSIZE];
+int open_server_socket(const int port, const char *ip) {
     const int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sock_addr = {0};
 
     if (sock == INVALID_SOCKET) {
-        snprintf(msg, BUFSIZE, "Error at socket call.\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error at socket call.\n");
+        write_log(log_msg);
         return INVALID_SOCKET;
     }
 
@@ -16,56 +15,53 @@ int open_server_socket(const int port, const char *ip, const char *log_file_path
     sock_addr.sin_addr.s_addr = inet_addr(ip);
 
     if (bind(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
-        snprintf(msg, BUFSIZE, "Error Binding. ID: %s\n", strerror(errno));
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Binding. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return INVALID_SOCKET;
     }
 
     if (listen(sock, 1) == SOCKET_ERROR) {
-        snprintf(msg, BUFSIZE, "Error Listening.\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Listening.\n");
+        write_log(log_msg);
         return INVALID_SOCKET;
     }
-    snprintf(msg, BUFSIZE, "Listening on %d\n", port);
-    write_log(log_file_path, msg);
+    snprintf(log_msg, BUFSIZE, "Listening on %d\n", port);
+    write_log(log_msg);
 
     return sock;
 }
 
-void recv_file_from_client(const int sock, char input[BUFSIZE], const char *log_file_path) {
-    char msg[BUFSIZE];
+void recv_file_from_client(const int sock, char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     if (file_name == NULL) {
-        snprintf(msg, BUFSIZE, "Failed To Get The Argument.\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Failed To Get The Argument.\n");
+        write_log(log_msg);
         return;
     }
 
-    snprintf(msg, BUFSIZE, "Writing To: %s.\n", file_name);
-    write_log(log_file_path, msg);
+    snprintf(log_msg, BUFSIZE, "Writing To: %s.\n", file_name);
+    write_log(log_msg);
     recv_file(sock, file_name);
 
     free(file_name);
 }
 
-void send_file_to_client(const int sock, char input[BUFSIZE], const char *log_file_path) {
-    char msg[BUFSIZE];
+void send_file_to_client(const int sock, char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     if (file_name == NULL) {
-        snprintf(msg, BUFSIZE, "Failed To Get The Argument.\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Failed To Get The Argument.\n");
+        write_log(log_msg);
         return;
     }
 
-    snprintf(msg, BUFSIZE, "Reading %s.\n", file_name);
-    write_log(log_file_path, msg);
+    snprintf(log_msg, BUFSIZE, "Reading %s.\n", file_name);
+    write_log(log_msg);
     send_file(sock, file_name);
 
     free(file_name);
 }
 
-char* get_path(const char* dir, const char *log_file_path) {
-    char msg[BUFSIZE];
+char* get_path(const char* dir) {
     char *cwd = getcwd(NULL, 0);
     if (cwd == NULL) {
         return NULL;
@@ -87,21 +83,20 @@ char* get_path(const char* dir, const char *log_file_path) {
     return full_dir;
 }
 
-char** get_dir_file_list(const char* dir, int *length, const char *log_file_path) {
-    char msg[BUFSIZE];
-    char *path = get_path(dir, log_file_path), **files = malloc(sizeof(char*) * MIN_FILES);
+char** get_dir_file_list(const char* dir, int *length) {
+    char *path = get_path(dir), **files = malloc(sizeof(char*) * MIN_FILES);
     *length = 0;
     if (files == NULL) {
         if (path != NULL) {
             free(path);
         }
-        snprintf(msg, BUFSIZE, "Error Allocating Memory (1).\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Allocating Memory (1).\n");
+        write_log(log_msg);
         return NULL;
     }
     if (path == NULL) {
-        snprintf(msg, BUFSIZE, "Error Allocating Memory (2).\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Allocating Memory (2).\n");
+        write_log(log_msg);
         free(files);
         return NULL;
     }
@@ -109,8 +104,8 @@ char** get_dir_file_list(const char* dir, int *length, const char *log_file_path
     DIR* d = opendir(path);
     struct dirent *entry;
     if (d == NULL) {
-        snprintf(msg, BUFSIZE, "Error Opening Path. ID: %sn", strerror(errno));
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Opening Path. ID: %sn", strerror(errno));
+        write_log(log_msg);
         free(path);
         free(files);
         return NULL;
@@ -123,8 +118,8 @@ char** get_dir_file_list(const char* dir, int *length, const char *log_file_path
             i++;
             temp = realloc(files, sizeof(char*) * MIN_FILES * i);
             if (temp == NULL) {
-                snprintf(msg, BUFSIZE, "Error Reallocating Memory. ID: %s\n", strerror(errno));
-                write_log(log_file_path, msg);
+                snprintf(log_msg, BUFSIZE, "Error Reallocating Memory. ID: %s\n", strerror(errno));
+                write_log(log_msg);
                 free(path);
                 free_double_pointer(files, *length);
                 return NULL;
@@ -140,18 +135,17 @@ char** get_dir_file_list(const char* dir, int *length, const char *log_file_path
     return files;
 }
 
-void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
-    char msg[BUFSIZE];
+void ls(const int sock, char input[BUFSIZE]) {
     int num_of_files, flag = -1, len;
     char *dir = get_arg(input);
     if (dir == NULL) {
         dir = ".";
         flag = 0;
     }
-    char **files = get_dir_file_list(dir, &num_of_files, log_file_path), buffer[BUFSIZE];
+    char **files = get_dir_file_list(dir, &num_of_files);
     if (files == NULL) {
-        snprintf(msg, BUFSIZE, "Error Allocating Memory (2).\n");
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Allocating Memory (2).\n");
+        write_log(log_msg);
         if (flag != 0) {
             free(dir);
         }
@@ -160,8 +154,8 @@ void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
 
     len = sprintf(buffer, "%d", num_of_files);
     if (send_packet(sock, buffer, len) == SOCKET_ERROR) {
-        snprintf(msg, BUFSIZE, "Error Sending The Number Of Files. ID: %s\n", strerror(errno));
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Error Sending The Number Of Files. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         free_double_pointer(files, num_of_files);
         if (flag != 0) {
             free(dir);
@@ -170,11 +164,11 @@ void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
     }
 
     for (int i = 0; i < num_of_files; i++) {
-        snprintf(msg, BUFSIZE, "Sending: %s\n", files[i]);
-        write_log(log_file_path, msg);
+        snprintf(log_msg, BUFSIZE, "Sending: %s\n", files[i]);
+        write_log(log_msg);
         if (send_packet(sock, files[i], (int)strlen(files[i])) == SOCKET_ERROR) {
-            snprintf(msg, BUFSIZE, "Error Sending The Files Names. ID: %s\n", strerror(errno));
-            write_log(log_file_path, msg);
+            snprintf(log_msg, BUFSIZE, "Error Sending The Files Names. ID: %s\n", strerror(errno));
+            write_log(log_msg);
             free_double_pointer(files, num_of_files);
             if (flag != 0) {
                 free(dir);
@@ -189,15 +183,13 @@ void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
     }
 }
 
-int read_socket(const int sock, const char *log_file_path) {
-    char buffer [BUFSIZE];
-    char msg [BUFSIZE];
+int read_socket(const int sock) {
     ssize_t len;
 
     while (1) {
         if ((len = recv_packet(sock, buffer)) == SOCKET_ERROR) {
-            snprintf(msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
-            write_log(log_file_path, msg);
+            snprintf(log_msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
+            write_log(log_msg);
             continue;
         }
         if (len == 0) {
@@ -208,25 +200,25 @@ int read_socket(const int sock, const char *log_file_path) {
         // TODO: Accept commands larger than BUFSIZE.
         if (len < BUFSIZE) {
             buffer[len] = '\0';
-            snprintf(msg, BUFSIZE, "Received command: %s\n", buffer);
-            write_log(log_file_path, msg);
+            snprintf(log_msg, BUFSIZE, "Received command: %s\n", buffer);
+            write_log(log_msg);
             method = get_method(buffer);
         } else {
             continue;
         }
 
         if (method == NULL) {
-            snprintf(msg, BUFSIZE, "Unknown Command.\n");
-            write_log(log_file_path, msg);
+            snprintf(log_msg, BUFSIZE, "Unknown Command.\n");
+            write_log(log_msg);
             continue;
         }
 
         if (strcmp(method, "get") == 0) {
-            send_file_to_client(sock, buffer, log_file_path);
+            send_file_to_client(sock, buffer);
         } else if (strcmp(method, "set") == 0) {
-            recv_file_from_client(sock, buffer, log_file_path);
+            recv_file_from_client(sock, buffer);
         } else if (strcmp(method, "ls") == 0) {
-            ls(sock, buffer, log_file_path);
+            ls(sock, buffer);
         } else if (strcmp(method, "exit") == 0) {
             free(method);
             return 0;
@@ -271,19 +263,21 @@ void server(char *ip, int port) {
     if (ip == NULL) {
         ip = malloc(sizeof(char) * strlen(IP) + 1);
         if (ip == NULL) {
-            write_log(log_file_path, "Error Allocating ip Memory.\n");
+            write_log("Error Allocating ip Memory.\n");
             free(log_file_path);
             return;
         }
         strcpy(ip, IP);
     }
-    const int sock = open_server_socket(port, ip, log_file_path);
+    FILE *log_file = fopen(log_file_path, "w");
+    set_log_stream(log_file);
+    free(log_file_path);
+    const int sock = open_server_socket(port, ip);
     int client = INVALID_SOCKET;
     free(ip);
 
     if (sock == INVALID_SOCKET) {
-        write_log(log_file_path, "Error Setting Up The Socket\n");
-        free(log_file_path);
+        write_log("Error Setting Up The Socket\n");
         return;
     }
 
@@ -291,13 +285,13 @@ void server(char *ip, int port) {
     while (1) {
         client = accept(sock, NULL, NULL);
         if (client == SOCKET_ERROR) {
-            write_log(log_file_path,"Client Socket Error.\n");
+            write_log("Client Socket Error.\n");
             continue;
         }
         // TODO: auth client and start secure session.
-        flag = read_socket(client, log_file_path);
+        flag = read_socket(client);
         if (flag == -1) {
-            free(log_file_path);
+            fclose(log_file);
             close(sock);
             close(client);
             break;
