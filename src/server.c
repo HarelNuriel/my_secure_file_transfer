@@ -140,7 +140,6 @@ char** get_dir_file_list(const char* dir, int *length, const char *log_file_path
     return files;
 }
 
-// TODO: Fix TCP stream merging
 void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
     char msg[BUFSIZE];
     int num_of_files, flag = -1, len;
@@ -160,7 +159,7 @@ void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
     }
 
     len = sprintf(buffer, "%d", num_of_files);
-    if (send(sock, buffer, len, 0) == SOCKET_ERROR) {
+    if (send_packet(sock, buffer, len) == SOCKET_ERROR) {
         snprintf(msg, BUFSIZE, "Error Sending The Number Of Files. ID: %s\n", strerror(errno));
         write_log(log_file_path, msg);
         free_double_pointer(files, num_of_files);
@@ -173,7 +172,7 @@ void ls(const int sock, char input[BUFSIZE], const char *log_file_path) {
     for (int i = 0; i < num_of_files; i++) {
         snprintf(msg, BUFSIZE, "Sending: %s\n", files[i]);
         write_log(log_file_path, msg);
-        if (send(sock, files[i], (int)strlen(files[i]), 0) == SOCKET_ERROR) {
+        if (send_packet(sock, files[i], (int)strlen(files[i])) == SOCKET_ERROR) {
             snprintf(msg, BUFSIZE, "Error Sending The Files Names. ID: %s\n", strerror(errno));
             write_log(log_file_path, msg);
             free_double_pointer(files, num_of_files);
@@ -196,7 +195,7 @@ int read_socket(const int sock, const char *log_file_path) {
     ssize_t len;
 
     while (1) {
-        if ((len = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
+        if ((len = recv_packet(sock, buffer)) == SOCKET_ERROR) {
             snprintf(msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
             write_log(log_file_path, msg);
             continue;

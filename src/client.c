@@ -42,7 +42,7 @@ void get(const int sock, const char input[BUFSIZE]) {
         return;
     }
 
-    if (send(sock, input, (int)strlen(input), 0) == SOCKET_ERROR) {
+    if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
         printf("Error sending get. ID: %s\n", strerror(errno));
         free(file_name);
         return;
@@ -61,7 +61,7 @@ void set(const int sock, const char input[BUFSIZE]) {
         return;
     }
 
-    if (send(sock, input, (int)strlen(input), 0) == SOCKET_ERROR) {
+    if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
         printf("Error sending get. ID: %s\n", strerror(errno));
         free(file_name);
         return;
@@ -73,16 +73,15 @@ void set(const int sock, const char input[BUFSIZE]) {
     free(file_name);
 }
 
-// TODO: Fix TCP stream merging
 void list_dir(const int sock, char input[BUFSIZE]) {
-    if (send(sock, input, (int)strlen(input), 0) == SOCKET_ERROR) {
+    if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
         printf("Error Sending The Command. ID: %s\n", strerror(errno));
         return;
     }
 
     char buffer[BUFSIZE];
     ssize_t size;
-    if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
+    if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
         printf("Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
         return;
     }
@@ -94,9 +93,8 @@ void list_dir(const int sock, char input[BUFSIZE]) {
 
     buffer[size] = '\0';
     const long file_num = strtol(buffer, NULL, 10);
-    printf("Printing %ld files.", file_num);
     for (int i = 0; i < file_num; i++) {
-        if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
+        if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
             printf("Error Receiving The File's Name. ID: %s\n", strerror(errno));
             return;
         }
@@ -108,7 +106,7 @@ void list_dir(const int sock, char input[BUFSIZE]) {
         printf("%s\n", buffer);
     }
 
-    printf("\nListed %ld Files.", file_num);
+    printf("\nListed %ld Files.\n", file_num);
 }
 
 int process_cmd(char input[BUFSIZE], const int sock) {
@@ -128,14 +126,14 @@ int process_cmd(char input[BUFSIZE], const int sock) {
         list_dir(sock, input);
     } else if (strcmp(cmd, "exit") == 0) {
         free(cmd);
-        if (send(sock, "exit\0", (int)strlen("exit\0"), 0) == SOCKET_ERROR) {
+        if (send_packet(sock, "exit\0", (int)strlen("exit\0")) == SOCKET_ERROR) {
             printf("Error sending the data. ID: %s\n", strerror(errno));
             return 1;
         }
         return 0;
     } else if (strcmp(cmd, "shutdown") == 0) {
         free(cmd);
-        if (send(sock, "shutdown\0", (int)strlen("shutdown\0"), 0) == SOCKET_ERROR) {
+        if (send_packet(sock, "shutdown\0", (int)strlen("shutdown\0")) == SOCKET_ERROR) {
             printf("Error sending the data. ID: %s\n", strerror(errno));
             return 1;
         }

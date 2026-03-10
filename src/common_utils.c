@@ -85,6 +85,47 @@ long get_file_size(const char *file_name) {
     return size;
 }
 
+int send_packet(const int sock, const char *buffer, const unsigned int length) {
+    const unsigned int n_len = htonl(length);
+    if (send(sock, &n_len, sizeof(unsigned int), 0) == SOCKET_ERROR) {
+        printf("Error sending buffer size. ID: %s\n", strerror(errno));
+        return SOCKET_ERROR;
+    }
+
+    if (send(sock, buffer, length, 0) == SOCKET_ERROR) {
+        printf("Error sending buffer. ID: %s\n", strerror(errno));
+        return SOCKET_ERROR;
+    }
+
+    return 0;
+}
+
+ssize_t recv_packet(const int sock, char *buffer) {
+    ssize_t pkt_size = 0;
+    unsigned int len = 0;
+    if ((pkt_size = recv(sock, &len, sizeof(int), 0)) == SOCKET_ERROR) {
+        printf("Error receiving the packet's size. ID: %s\n", strerror(errno));
+        return SOCKET_ERROR;
+    }
+    if (pkt_size == 0) {
+        return 0;
+    }
+
+    unsigned int size = ntohl(len);
+    char *temp = buffer;
+    memset(buffer, 0, BUFSIZE);
+    while (size > 0) {
+        if ((pkt_size = recv(sock, temp, size, 0)) == SOCKET_ERROR) {
+            printf("Error receiving the packet. ID: %s\n", strerror(errno));
+            return SOCKET_ERROR;
+        }
+        temp += pkt_size;
+        size -= pkt_size;
+    }
+
+    return ntohl(len);
+}
+
 int send_file(const int sock, const char *file_name) {
     long size = get_file_size(file_name);
     char buffer[BUFSIZE], s_size[BUFSIZE];
@@ -98,17 +139,16 @@ int send_file(const int sock, const char *file_name) {
     if (size == -1) {
         return 0;
     }
-    const long len = sprintf(s_size, "%ld", size);
+    const unsigned int len = sprintf(s_size, "%ld", size);
 
-    if (send(sock, s_size, len, 0) ==  SOCKET_ERROR) {
+    if (send_packet(sock, s_size, len) ==  SOCKET_ERROR) {
         printf("Error Sending The File Size. ID: %s\n", strerror(errno));
         return 0;
     }
 
-    // TODO: Fix TCP stream merging.
     for (; size > BUFSIZE; size -= BUFSIZE) {
         if (fread(buffer, sizeof(char), BUFSIZE, fp)) {
-            if (send(sock, buffer, BUFSIZE, 0) == SOCKET_ERROR) {
+            if (send_packet(sock, buffer, BUFSIZE) == SOCKET_ERROR) {
                 printf("Error Sending The File. ID: %s\n", strerror(errno));
                 return 0;
             }
@@ -117,7 +157,7 @@ int send_file(const int sock, const char *file_name) {
 
     if (size > 0) {
         if (fread(buffer, sizeof(char), size, fp)) {
-            if (send(sock, buffer, size, 0) == SOCKET_ERROR) {
+            if (send_packet(sock, buffer, size) == SOCKET_ERROR) {
                 printf("Error Sending The File. ID: %s\n", strerror(errno));
                 return 0;
             }
@@ -141,7 +181,7 @@ int recv_file(const int sock, const char *file_name) {
         return 0;
     }
 
-    if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
+    if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
         printf("Error receiving file size.");
         return 0;
     }
@@ -154,20 +194,20 @@ int recv_file(const int sock, const char *file_name) {
     long len = strtol(buffer, NULL, 10);
 
     for (; len > BUFSIZE; len -= size) {
-        if ((size = recv(sock, buffer, BUFSIZE, 0)) == SOCKET_ERROR) {
+        if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
             printf("Error Receiving File Data.");
             return 0;
         }
         fwrite(buffer, sizeof(char), size, fp);
     }
 
-    // TODO: Fix receiving the final chuck (TCP Truncated)
-    if (len > 0) {
-        if ((size = recv(sock, buffer, len, 0)) == SOCKET_ERROR) {
+    while (len > 0) {
+        if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
             printf("Error Receiving File Data.");
             return 0;
         }
         fwrite(buffer, sizeof(char), size, fp);
+        len -= size;
     }
 
     printf("File Received Successfully.\n");
