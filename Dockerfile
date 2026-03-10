@@ -8,7 +8,7 @@ RUN mkdir /server/test_files
 RUN mkdir /var/log/server
 WORKDIR /server
 
-COPY test/ /server/
+COPY test/ /server/test_files/
 COPY my_secure_file_transfer /server/
 
 RUN chmod +x /server/my_secure_file_transfer
