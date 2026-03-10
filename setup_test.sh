@@ -9,6 +9,15 @@ else
   echo "Directory Exists."
 fi
 
+echo "Checking if $(pwd)/CMakeFiles Exists."
+if [ ! -d "./CMakeFiles" ]; then
+  echo "Directory does not Exists."
+  echo "Initializing cmake."
+  cmake -S ./ -B ./
+else
+  echo "Directory Exists."
+fi
+
 echo "Building the project."
 cmake --build .
 echo "Done."
