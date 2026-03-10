@@ -56,6 +56,8 @@ void get(const int sock, const char input[BUFSIZE]) {
     write_log(log_msg);
     recv_file(sock, file_name);
 
+    snprintf(log_msg, BUFSIZE, "Successfully Received %s.\n", file_name);
+    write_log(log_msg);
     free(file_name);
 }
 
@@ -78,6 +80,8 @@ void set(const int sock, const char input[BUFSIZE]) {
     write_log(log_msg);
     send_file(sock, file_name);
 
+    snprintf(log_msg, BUFSIZE, "Successfully Sent %s.\n", file_name);
+    write_log(log_msg);
     free(file_name);
 }
 
@@ -186,6 +190,7 @@ void client(char *ip, int port) {
     const int sock = open_client_socket(ip, port);
 
     snprintf(log_msg, BUFSIZE, "Session started with host: %s\n", ip);
+    write_log(log_msg);
 
     session(sock);
 

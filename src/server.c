@@ -236,7 +236,6 @@ int read_socket(const int sock) {
     }
 }
 
-
 void server(char *ip, int port) {
     char *log_file_path = malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
     strcpy(log_file_path, LOG_PATH);

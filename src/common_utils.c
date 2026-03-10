@@ -12,14 +12,14 @@ char* get_arg(const char input[BUFSIZE]) {
     int cmd_len = get_command_len(input);
     char log_msg[BUFSIZE];
     if (cmd_len >= strlen(input)) {
-        write_log("Invalid Argument.");
+        write_log("Invalid Argument.\n");
         return NULL;
     }
 
     cmd_len++;
     const size_t name_len = strlen(input + cmd_len);
     if (name_len == 0) {
-        write_log("Invalid Argument.");
+        write_log("Invalid Argument.\n");
         return NULL;
     }
 
@@ -256,6 +256,7 @@ void write_log(char *msg) {
         return;
     }
     fprintf(fp, "%s", msg);
+    fflush(fp);
 }
 
 void set_log_stream(FILE *stream) {
