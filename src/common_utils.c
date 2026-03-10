@@ -4,24 +4,30 @@
 
 #include "common_utils.h"
 
+#include <math.h>
+
+static FILE *log_stream;
+
 char* get_arg(const char input[BUFSIZE]) {
     int cmd_len = get_command_len(input);
+    char log_msg[BUFSIZE];
     if (cmd_len >= strlen(input)) {
-        printf("Invalid Argument.");
+        write_log("Invalid Argument.");
         return NULL;
     }
 
     cmd_len++;
     const size_t name_len = strlen(input + cmd_len);
     if (name_len == 0) {
-        printf("Invalid Argument.");
+        write_log("Invalid Argument.");
         return NULL;
     }
 
     char *file_name = malloc(sizeof(char) * (name_len + 1));
 
     if (file_name == NULL) {
-        printf("Error allocating memory.\n");
+        snprintf(log_msg, BUFSIZE, "Error allocating memory. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return NULL;
     }
 
@@ -71,8 +77,10 @@ int get_command_len(const char input[BUFSIZE]) {
 
 long get_file_size(const char *file_name) {
     FILE *fp = fopen(file_name, "rb");
+    char log_msg[BUFSIZE];
     if (fp == NULL) {
-        printf("Error Opening The File.\n");
+        snprintf(log_msg, BUFSIZE, "Error Opening The File. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return -1;
     }
 
@@ -87,13 +95,16 @@ long get_file_size(const char *file_name) {
 
 int send_packet(const int sock, const char *buffer, const unsigned int length) {
     const unsigned int n_len = htonl(length);
+    char log_msg[BUFSIZE];
     if (send(sock, &n_len, sizeof(unsigned int), 0) == SOCKET_ERROR) {
-        printf("Error sending buffer size. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending buffer size. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return SOCKET_ERROR;
     }
 
     if (send(sock, buffer, length, 0) == SOCKET_ERROR) {
-        printf("Error sending buffer. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending buffer. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return SOCKET_ERROR;
     }
 
@@ -103,8 +114,10 @@ int send_packet(const int sock, const char *buffer, const unsigned int length) {
 ssize_t recv_packet(const int sock, char *buffer) {
     ssize_t pkt_size = 0;
     unsigned int len = 0;
+    char log_msg[BUFSIZE];
     if ((pkt_size = recv(sock, &len, sizeof(int), 0)) == SOCKET_ERROR) {
-        printf("Error receiving the packet's size. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error receiving the packet's size. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return SOCKET_ERROR;
     }
     if (pkt_size == 0) {
@@ -116,7 +129,8 @@ ssize_t recv_packet(const int sock, char *buffer) {
     memset(buffer, 0, BUFSIZE);
     while (size > 0) {
         if ((pkt_size = recv(sock, temp, size, 0)) == SOCKET_ERROR) {
-            printf("Error receiving the packet. ID: %s\n", strerror(errno));
+            snprintf(log_msg, BUFSIZE, "Error receiving the packet. ID: %s\n", strerror(errno));
+            write_log(log_msg);
             return SOCKET_ERROR;
         }
         if (pkt_size == 0) {
@@ -131,28 +145,31 @@ ssize_t recv_packet(const int sock, char *buffer) {
 
 int send_file(const int sock, const char *file_name) {
     long size = get_file_size(file_name);
-    char buffer[BUFSIZE], s_size[BUFSIZE];
+    char buffer[BUFSIZE], s_size[BUFSIZE], log_msg[BUFSIZE];
     FILE *fp = fopen(file_name, "rb");
 
     if (fp == NULL) {
-        printf("Error opening the file.\n");
+        snprintf(log_msg, BUFSIZE, "Error opening the file. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return 0;
     }
 
     if (size == -1) {
         return 0;
     }
-    const unsigned int len = sprintf(s_size, "%ld", size);
+    const unsigned int len = snprintf(s_size, BUFSIZE, "%ld", size);
 
     if (send_packet(sock, s_size, len) ==  SOCKET_ERROR) {
-        printf("Error Sending The File Size. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Sending The File Size. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return 0;
     }
 
     for (; size > BUFSIZE; size -= BUFSIZE) {
         if (fread(buffer, sizeof(char), BUFSIZE, fp)) {
             if (send_packet(sock, buffer, BUFSIZE) == SOCKET_ERROR) {
-                printf("Error Sending The File. ID: %s\n", strerror(errno));
+                snprintf(log_msg, BUFSIZE, "Error Sending The File. ID: %s\n", strerror(errno));
+                write_log(log_msg);
                 return 0;
             }
         }
@@ -161,12 +178,14 @@ int send_file(const int sock, const char *file_name) {
     if (size > 0) {
         if (fread(buffer, sizeof(char), size, fp)) {
             if (send_packet(sock, buffer, size) == SOCKET_ERROR) {
-                printf("Error Sending The File. ID: %s\n", strerror(errno));
+                snprintf(log_msg, BUFSIZE, "Error Sending The File. ID: %s\n", strerror(errno));
+                write_log(log_msg);
                 return 0;
             }
         }
     } else if (ferror(fp)) {
-        printf("File reading error.\n");
+        snprintf(log_msg, BUFSIZE, "File reading error. ID: %s\n", strerror(errno));
+        write_log(log_msg);
     }
 
     fclose(fp);
@@ -176,21 +195,24 @@ int send_file(const int sock, const char *file_name) {
 
 int recv_file(const int sock, const char *file_name) {
     FILE *fp = fopen(file_name, "wb");
-    char buffer [BUFSIZE];
+    char buffer [BUFSIZE], log_msg[BUFSIZE];
     ssize_t size;
 
     if (fp == NULL) {
-        printf("Error opening the file.\n");
+        snprintf(log_msg, BUFSIZE, "Error opening the file. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return 0;
     }
 
     if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
-        printf("Error receiving file size.");
+        snprintf(log_msg, BUFSIZE, "Error receiving file size. ID: %s\n", strerror(errno));
+        write_log(log_msg);
         return 0;
     }
 
     if (size >= BUFSIZE) {
-        printf("Size Too Big.");
+        snprintf(log_msg, BUFSIZE, "Size Too Big.\n");
+        write_log(log_msg);
         return 0;
     }
     buffer[size] = '\0';
@@ -198,7 +220,8 @@ int recv_file(const int sock, const char *file_name) {
 
     for (; len > BUFSIZE; len -= size) {
         if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
-            printf("Error Receiving File Data.");
+            snprintf(log_msg, BUFSIZE, "Error Receiving File Data. ID: %s\n", strerror(errno));
+            write_log(log_msg);
             return 0;
         }
         fwrite(buffer, sizeof(char), size, fp);
@@ -206,14 +229,16 @@ int recv_file(const int sock, const char *file_name) {
 
     while (len > 0) {
         if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
-            printf("Error Receiving File Data.");
+            snprintf(log_msg, BUFSIZE, "Error Receiving File Data. ID: %s\n", strerror(errno));
+            write_log(log_msg);
             return 0;
         }
         fwrite(buffer, sizeof(char), size, fp);
         len -= size;
     }
 
-    printf("File Received Successfully.\n");
+    snprintf(log_msg, BUFSIZE, "File Received Successfully.\n");
+    write_log(log_msg);
     fclose(fp);
     return 1;
 }

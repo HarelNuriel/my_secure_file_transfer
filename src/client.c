@@ -5,6 +5,7 @@
 #include "client.h"
 
 int open_client_socket(const char *ip, const int port) {
+    char log_msg[BUFSIZE];
     const int sock = socket(AF_INET, SOCK_STREAM, TCP);
     struct sockaddr_in sock_addr;
 
@@ -17,9 +18,9 @@ int open_client_socket(const char *ip, const int port) {
     sock_addr.sin_port = htons(port);
     sock_addr.sin_addr.s_addr = inet_addr(ip);
 
-    sprintf("Connecting to: %s:%d\n", ip, port);
+    snprintf(log_msg, BUFSIZE, "Connecting to: %s:%d\n", ip, port);
     if (connect(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
-        sprintf(log_msg, "Error Connecting. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Connecting. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return INVALID_SOCKET;
     }
@@ -37,6 +38,7 @@ void help() {
 }
 
 void get(const int sock, const char input[BUFSIZE]) {
+    char log_msg[BUFSIZE];
     char *file_name = get_arg(input);
     if (file_name == NULL) {
         write_log("Invalid Argument.\n");
@@ -44,13 +46,13 @@ void get(const int sock, const char input[BUFSIZE]) {
     }
 
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        sprintf(log_msg, "Error sending get. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n", strerror(errno));
         write_log(log_msg);
         free(file_name);
         return;
     }
 
-    sprintf(log_msg, "Writing To: %s\n", file_name);
+    snprintf(log_msg, BUFSIZE, "Writing To: %s\n", file_name);
     write_log(log_msg);
     recv_file(sock, file_name);
 
@@ -58,6 +60,7 @@ void get(const int sock, const char input[BUFSIZE]) {
 }
 
 void set(const int sock, const char input[BUFSIZE]) {
+    char log_msg[BUFSIZE];
     char *file_name = get_arg(input);
     if (file_name == NULL) {
         write_log("Invalid Argument.\n");
@@ -65,13 +68,13 @@ void set(const int sock, const char input[BUFSIZE]) {
     }
 
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        sprintf(log_msg, "Error sending get. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n", strerror(errno));
         write_log(log_msg);
         free(file_name);
         return;
     }
 
-    sprintf(log_msg, "Reading %s\n", file_name);
+    snprintf(log_msg, BUFSIZE, "Reading %s\n", file_name);
     write_log(log_msg);
     send_file(sock, file_name);
 
@@ -79,15 +82,16 @@ void set(const int sock, const char input[BUFSIZE]) {
 }
 
 void list_dir(const int sock, char input[BUFSIZE]) {
+    char log_msg[BUFSIZE], buffer[BUFSIZE];
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        sprintf(log_msg, "Error Sending The Command. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Sending The Command. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return;
     }
 
     ssize_t size;
     if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
-        sprintf(log_msg, "Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return;
     }
@@ -101,7 +105,7 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     const long file_num = strtol(buffer, NULL, 10);
     for (int i = 0; i < file_num; i++) {
         if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
-            sprintf(log_msg, "Error Receiving The File's Name. ID: %s\n", strerror(errno));
+            snprintf(log_msg, BUFSIZE, "Error Receiving The File's Name. ID: %s\n", strerror(errno));
             write_log(log_msg);
             return;
         }
@@ -110,16 +114,16 @@ void list_dir(const int sock, char input[BUFSIZE]) {
             continue;
         }
         buffer[size] = '\0';
-        sprintf(log_msg, "%s\n", buffer);
+        snprintf(log_msg, BUFSIZE, "%s\n", buffer);
         write_log(log_msg);
     }
 
-    sprintf(log_msg, "\nListed %ld Files.\n", file_num);
+    snprintf(log_msg, BUFSIZE, "\nListed %ld Files.\n", file_num);
     write_log(log_msg);
 }
 
 int process_cmd(char input[BUFSIZE], const int sock) {
-    char *cmd = get_method(input);
+    char *cmd = get_method(input), log_msg[BUFSIZE];
     if (cmd == NULL) {
         write_log("Invalid Command.\n");
         return 1;
@@ -136,7 +140,7 @@ int process_cmd(char input[BUFSIZE], const int sock) {
     } else if (strcmp(cmd, "exit") == 0) {
         free(cmd);
         if (send_packet(sock, "exit\0", (int)strlen("exit\0")) == SOCKET_ERROR) {
-            sprintf(log_msg, "Error sending the data. ID: %s\n", strerror(errno));
+            snprintf(log_msg, BUFSIZE, "Error sending the data. ID: %s\n", strerror(errno));
             write_log(log_msg);
             return 1;
         }
@@ -144,7 +148,7 @@ int process_cmd(char input[BUFSIZE], const int sock) {
     } else if (strcmp(cmd, "shutdown") == 0) {
         free(cmd);
         if (send_packet(sock, "shutdown\0", (int)strlen("shutdown\0")) == SOCKET_ERROR) {
-            sprintf(log_msg, "Error sending the data. ID: %s\n", strerror(errno));
+            snprintf(log_msg, BUFSIZE, "Error sending the data. ID: %s\n", strerror(errno));
             write_log(log_msg);
             return 1;
         }
@@ -159,6 +163,7 @@ int process_cmd(char input[BUFSIZE], const int sock) {
 
 void session(const int sock) {
     int flag = 1;
+    char buffer[BUFSIZE];
 
     while (flag) {
         write_log("> ");
@@ -168,6 +173,7 @@ void session(const int sock) {
 }
 
 void client(char *ip, int port) {
+    char log_msg[BUFSIZE];
     if (ip == NULL) {
         ip = IP;
     }
@@ -179,7 +185,7 @@ void client(char *ip, int port) {
 
     const int sock = open_client_socket(ip, port);
 
-    sprintf(log_msg, "Session started with host: %s\n", ip);
+    snprintf(log_msg, BUFSIZE, "Session started with host: %s\n", ip);
 
     session(sock);
 

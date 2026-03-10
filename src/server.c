@@ -3,6 +3,7 @@
 int open_server_socket(const int port, const char *ip) {
     const int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sock_addr = {0};
+    char log_msg[BUFSIZE];
 
     if (sock == INVALID_SOCKET) {
         snprintf(log_msg, BUFSIZE, "Error at socket call.\n");
@@ -33,6 +34,7 @@ int open_server_socket(const int port, const char *ip) {
 
 void recv_file_from_client(const int sock, char input[BUFSIZE]) {
     char *file_name = get_arg(input);
+    char log_msg[BUFSIZE];
     if (file_name == NULL) {
         snprintf(log_msg, BUFSIZE, "Failed To Get The Argument.\n");
         write_log(log_msg);
@@ -47,7 +49,7 @@ void recv_file_from_client(const int sock, char input[BUFSIZE]) {
 }
 
 void send_file_to_client(const int sock, char input[BUFSIZE]) {
-    char *file_name = get_arg(input);
+    char *file_name = get_arg(input), log_msg[BUFSIZE];;
     if (file_name == NULL) {
         snprintf(log_msg, BUFSIZE, "Failed To Get The Argument.\n");
         write_log(log_msg);
@@ -84,7 +86,7 @@ char* get_path(const char* dir) {
 }
 
 char** get_dir_file_list(const char* dir, int *length) {
-    char *path = get_path(dir), **files = malloc(sizeof(char*) * MIN_FILES);
+    char *path = get_path(dir), **files = malloc(sizeof(char*) * MIN_FILES), log_msg[BUFSIZE];
     *length = 0;
     if (files == NULL) {
         if (path != NULL) {
@@ -137,7 +139,7 @@ char** get_dir_file_list(const char* dir, int *length) {
 
 void ls(const int sock, char input[BUFSIZE]) {
     int num_of_files, flag = -1, len;
-    char *dir = get_arg(input);
+    char *dir = get_arg(input), buffer[BUFSIZE], log_msg[BUFSIZE];;
     if (dir == NULL) {
         dir = ".";
         flag = 0;
@@ -152,7 +154,7 @@ void ls(const int sock, char input[BUFSIZE]) {
         return;
     }
 
-    len = sprintf(buffer, "%d", num_of_files);
+    len = snprintf(buffer, BUFSIZE, "%d", num_of_files);
     if (send_packet(sock, buffer, len) == SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Sending The Number Of Files. ID: %s\n", strerror(errno));
         write_log(log_msg);
@@ -185,6 +187,7 @@ void ls(const int sock, char input[BUFSIZE]) {
 
 int read_socket(const int sock) {
     ssize_t len;
+    char buffer[BUFSIZE], log_msg[BUFSIZE];
 
     while (1) {
         if ((len = recv_packet(sock, buffer)) == SOCKET_ERROR) {
@@ -241,7 +244,7 @@ void server(char *ip, int port) {
     if (access(log_file_path, F_OK) != 0) {
         DIR *d = opendir(LOG_PATH);
         if (d == NULL) {
-            if (mkdir(LOG_PATH, 755) != 0) {
+            if (mkdir(LOG_PATH, 0744) != 0) {
                 printf("Error creating %s, ID: %s", LOG_PATH, strerror(errno));
                 free(log_file_path);
                 return;
@@ -270,6 +273,11 @@ void server(char *ip, int port) {
         strcpy(ip, IP);
     }
     FILE *log_file = fopen(log_file_path, "w");
+    if (log_file == NULL) {
+        free(ip);
+        free(log_file_path);
+        return;
+    }
     set_log_stream(log_file);
     free(log_file_path);
     const int sock = open_server_socket(port, ip);
