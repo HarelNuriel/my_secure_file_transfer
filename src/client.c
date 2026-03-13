@@ -4,6 +4,8 @@
 
 #include "client.h"
 
+#include "auth.h"
+
 int open_client_socket(const char *ip, const int port) {
     char log_msg[BUFSIZE];
     const int sock = socket(AF_INET, SOCK_STREAM, TCP);
@@ -176,6 +178,36 @@ void session(const int sock) {
     }
 }
 
+// TODO: After hash implementation refactor with known lengths.
+unsigned int auth(const int sock) {
+    char name[BUFSIZE], passwd[BUFSIZE];
+    int is_valid = 0;
+
+    printf("Please Enter Username and Password:\n");
+    printf("Username: ");
+    fgets(name, BUFSIZE, stdin);
+    name[strcspn(name, "\n")] = '\0';
+
+    printf("Password: ");
+    fgets(passwd, BUFSIZE, stdin);
+    passwd[strcspn(passwd, "\n")] = '\0';
+
+    if (send_packet(sock, name, strlen(name)) == SOCKET_ERROR) {
+        printf("Error Sending The Username. ID: %s\n", strerror(errno));
+        return 0;
+    }
+    if (send_packet(sock, passwd, strlen(passwd)) == SOCKET_ERROR) {
+        printf("Error Sending The Username. ID: %s\n", strerror(errno));
+        return 0;
+    }
+
+    while (recv(sock, &is_valid, sizeof(int), 0) == SOCKET_ERROR) {
+        printf("Error Receiving Answer. ID: %s\n", strerror(errno));
+    }
+
+    return ntohl(is_valid);
+}
+
 void client(char *ip, int port) {
     char log_msg[BUFSIZE];
     if (ip == NULL) {
@@ -185,14 +217,21 @@ void client(char *ip, int port) {
         port = PORT;
     }
 
-    // TODO: Implement login.
-
     const int sock = open_client_socket(ip, port);
 
     snprintf(log_msg, BUFSIZE, "Session started with host: %s\n", ip);
     write_log(log_msg);
 
-    session(sock);
+    unsigned int i = 0, is_valid;
+    while ((is_valid = auth(sock)) != VALID_CREDS && i < 3) {
+        if (is_valid == INVALID_CREDS) {
+            printf("Invalid Credentials.\n");
+            i++;
+        }
+    }
+    if (is_valid == VALID_CREDS) {
+        session(sock);
+    }
 
     free(ip);
     close(sock);

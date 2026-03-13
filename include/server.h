@@ -7,8 +7,6 @@
 #define SECURE_FILE_TRANSFER_SERVER_H
 
 #include "common_utils.h"
-#include <dirent.h>
-#include <sys/stat.h>
 
 #define MIN_FILES 16
 #define LOG_PATH "/var/log/server/"

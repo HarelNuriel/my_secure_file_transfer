@@ -13,6 +13,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #define BUFSIZE 1024
 #define INVALID_SOCKET (-1)
@@ -32,5 +34,7 @@ void write_log(char *msg);
 ssize_t recv_packet(int sock, char *buffer);
 int send_packet(int sock, const char *buffer, unsigned int length);
 void set_log_stream(FILE *stream);
+char* get_path(const char* dir);
+void close_log_stream();
 
 #endif //SECURE_FILE_TRANSFER_COMMON_UTILS_H

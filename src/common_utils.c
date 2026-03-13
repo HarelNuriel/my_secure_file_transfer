@@ -4,8 +4,6 @@
 
 #include "common_utils.h"
 
-#include <math.h>
-
 static FILE *log_stream;
 
 char* get_arg(const char input[BUFSIZE]) {
@@ -261,4 +259,35 @@ void write_log(char *msg) {
 
 void set_log_stream(FILE *stream) {
     log_stream = stream;
+}
+
+char* get_path(const char* dir) {
+    char *cwd = getcwd(NULL, 0);
+    if (cwd == NULL) {
+        char buffer[BUFSIZE];
+        snprintf(buffer, BUFSIZE, "Error Getting cwd: ID: %s\n", strerror(errno));
+        write_log(buffer);
+        return NULL;
+    }
+
+    const size_t dir_len = strlen(cwd) + strlen(dir) + 4;
+    char *full_dir = malloc(sizeof(char) * dir_len);
+    if (full_dir == NULL) {
+        return NULL;
+    }
+    memset(full_dir, 0, dir_len);
+
+    strcat(full_dir, cwd);
+    strcat(full_dir, "/");
+    if (dir != NULL) {
+        strcat(full_dir, dir);
+        strcat(full_dir, "/\0");
+    }
+
+    free(cwd);
+    return full_dir;
+}
+
+void close_log_stream() {
+    fclose(log_stream);
 }

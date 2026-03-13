@@ -9,7 +9,9 @@ set(SOURCE_FILES main.c
         src/client.c
         include/client.h
         src/common_utils.c
-        include/common_utils.h)
+        include/common_utils.h
+        src/auth.c
+        include/auth.h)
 
 add_executable(my_secure_file_transfer ${SOURCE_FILES})
 

@@ -1,5 +1,7 @@
 #include "server.h"
 
+#include "auth.h"
+
 int open_server_socket(const int port, const char *ip) {
     const int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sock_addr = {0};
@@ -61,28 +63,6 @@ void send_file_to_client(const int sock, char input[BUFSIZE]) {
     send_file(sock, file_name);
 
     free(file_name);
-}
-
-char* get_path(const char* dir) {
-    char *cwd = getcwd(NULL, 0);
-    if (cwd == NULL) {
-        return NULL;
-    }
-
-    const size_t dir_len = strlen(cwd) + strlen(dir) + 4;
-    char *full_dir = malloc(sizeof(char) * dir_len);
-    if (full_dir == NULL) {
-        return NULL;
-    }
-    memset(full_dir, 0, dir_len);
-
-    strcat(full_dir, cwd);
-    strcat(full_dir, "/");
-    strcat(full_dir, dir);
-    strcat(full_dir, "/\0");
-
-    free(cwd);
-    return full_dir;
 }
 
 char** get_dir_file_list(const char* dir, int *length) {
@@ -236,7 +216,12 @@ int read_socket(const int sock) {
     }
 }
 
-void server(char *ip, int port) {
+int setup() {
+    if (!auth_ready()) {
+        write_log("Error Setting Up Auth.\n");
+        return 0;
+    }
+
     char *log_file_path = malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
     strcpy(log_file_path, LOG_PATH);
     strcat(log_file_path, LOG_FILE);
@@ -246,17 +231,69 @@ void server(char *ip, int port) {
             if (mkdir(LOG_PATH, 0744) != 0) {
                 printf("Error creating %s, ID: %s", LOG_PATH, strerror(errno));
                 free(log_file_path);
-                return;
+                return 0;
             }
-            FILE *fp = fopen(log_file_path, "w");
-            if (fp == NULL) {
-                printf("Error creating %s, ID: %s", log_file_path, strerror(errno));
-                free(log_file_path);
-                return;
-            }
-            fclose(fp);
+            d = opendir(LOG_PATH);
         }
+        FILE *fp = fopen(log_file_path, "w");
+        if (fp == NULL) {
+            printf("Error creating %s, ID: %s", log_file_path, strerror(errno));
+            free(log_file_path);
+            return 0;
+        }
+        fclose(fp);
         closedir(d);
+    }
+
+    FILE *log_file = fopen(log_file_path, "w");
+    if (log_file == NULL) {
+        free(log_file_path);
+        return 0;
+    }
+    set_log_stream(log_file);
+    free(log_file_path);
+
+    return 1;
+}
+
+// TODO: After hash implementation refactor with known lengths.
+unsigned int auth_user(const int sock) {
+    char name[BUFSIZE], passwd[BUFSIZE];
+    unsigned int is_valid = htonl(INVALID_CREDS);
+
+    if (recv_packet(sock, name) == SOCKET_ERROR) {
+        snprintf(name, BUFSIZE, "Error Receiving Username. ID: %s\n", strerror(errno));
+        write_log(name);
+        is_valid = htonl(0);
+        send(sock, &is_valid, sizeof(int), 0);
+        return SOCKET_ERROR;
+    }
+
+    if (recv_packet(sock, passwd) == SOCKET_ERROR) {
+        snprintf(passwd, BUFSIZE, "Error Receiving Username. ID: %s\n", strerror(errno));
+        write_log(passwd);
+        is_valid = htonl(0);
+        send(sock, &is_valid, sizeof(int), 0);
+        return SOCKET_ERROR;
+    }
+
+    if (validate_auth_user(name, passwd) == VALID_CREDS) {
+        is_valid = htonl(VALID_CREDS);
+    }
+
+    char buffer[BUFSIZE];
+    while (send(sock, &is_valid, sizeof(int), 0) == SOCKET_ERROR) {
+        snprintf(buffer, BUFSIZE, "Error Sending Auth Validation. ID: %s\n", strerror(errno));
+        write_log(buffer);
+    }
+
+    return ntohl(is_valid);
+}
+
+void server(char *ip, int port) {
+    if (!setup()) {
+        write_log("Couldn't Finish Setup.\n");
+        return;
     }
 
     if (port == 0) {
@@ -266,19 +303,11 @@ void server(char *ip, int port) {
         ip = malloc(sizeof(char) * strlen(IP) + 1);
         if (ip == NULL) {
             write_log("Error Allocating ip Memory.\n");
-            free(log_file_path);
             return;
         }
         strcpy(ip, IP);
     }
-    FILE *log_file = fopen(log_file_path, "w");
-    if (log_file == NULL) {
-        free(ip);
-        free(log_file_path);
-        return;
-    }
-    set_log_stream(log_file);
-    free(log_file_path);
+
     const int sock = open_server_socket(port, ip);
     int client = INVALID_SOCKET;
     free(ip);
@@ -288,20 +317,27 @@ void server(char *ip, int port) {
         return;
     }
 
-    int flag;
+    int flag, i;
+    unsigned int is_valid;
     while (1) {
+        i = 0;
         client = accept(sock, NULL, NULL);
         if (client == SOCKET_ERROR) {
             write_log("Client Socket Error.\n");
             continue;
         }
         // TODO: auth client and start secure session.
-        flag = read_socket(client);
-        if (flag == -1) {
-            fclose(log_file);
-            close(sock);
-            close(client);
-            break;
+        while ((is_valid = auth_user(client)) != VALID_CREDS && i < 3) {
+            i++;
+        }
+        if (is_valid == VALID_CREDS) {
+            flag = read_socket(client);
+            if (flag == -1) {
+                close_log_stream();
+                close(sock);
+                close(client);
+                break;
+            }
         }
         close(client);
     }
