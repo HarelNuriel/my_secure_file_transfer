@@ -11,7 +11,9 @@ set(SOURCE_FILES main.c
         src/common_utils.c
         include/common_utils.h
         src/auth.c
-        include/auth.h)
+        include/auth.h
+        src/sha256.c
+        include/sha256.h)
 
 add_executable(my_secure_file_transfer ${SOURCE_FILES})
 
