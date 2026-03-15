@@ -6,7 +6,7 @@
 #define MY_SECURE_FILE_TRANSFER_AUTH_H
 
 #include "common_utils.h"
-#include "auth.h"
+#include "sha256.h"
 
 #define PASSWD_FILE "users.txt"
 #define VALID_CREDS 1
@@ -14,7 +14,9 @@
 
 int auth_ready();
 void free_auth();
-int validate_auth_user(const char *name, const char *passwd);
+char* prepare_creds(const char *name, const char *passwd);
+int validate_auth_user(const char *hash);
+int add_user(const char *hash);
 
 struct user {
     char *name;

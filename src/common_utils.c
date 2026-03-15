@@ -109,7 +109,7 @@ int send_packet(const int sock, const char *buffer, const unsigned int length) {
     return 0;
 }
 
-ssize_t recv_packet(const int sock, char *buffer) {
+ssize_t recv_packet(const int sock, char *buffer, const long max_size) {
     ssize_t pkt_size = 0;
     unsigned int len = 0;
     char log_msg[BUFSIZE];
@@ -123,8 +123,13 @@ ssize_t recv_packet(const int sock, char *buffer) {
     }
 
     unsigned int size = ntohl(len);
+    if (size > max_size) {
+        write_log("Size Too Big.\n");
+        return SOCKET_ERROR;
+    }
+
     char *temp = buffer;
-    memset(buffer, 0, BUFSIZE);
+    memset(buffer, 0, max_size);
     while (size > 0) {
         if ((pkt_size = recv(sock, temp, size, 0)) == SOCKET_ERROR) {
             snprintf(log_msg, BUFSIZE, "Error receiving the packet. ID: %s\n", strerror(errno));
@@ -132,6 +137,7 @@ ssize_t recv_packet(const int sock, char *buffer) {
             return SOCKET_ERROR;
         }
         if (pkt_size == 0) {
+            write_log("Client Disconnected.\n");
             return 0;
         }
         temp += pkt_size;
@@ -194,7 +200,7 @@ int send_file(const int sock, const char *file_name) {
 int recv_file(const int sock, const char *file_name) {
     FILE *fp = fopen(file_name, "wb");
     char buffer [BUFSIZE], log_msg[BUFSIZE];
-    ssize_t size;
+    ssize_t file_size, chunk_size;
 
     if (fp == NULL) {
         snprintf(log_msg, BUFSIZE, "Error opening the file. ID: %s\n", strerror(errno));
@@ -202,37 +208,43 @@ int recv_file(const int sock, const char *file_name) {
         return 0;
     }
 
-    if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
+    if ((file_size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error receiving file size. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return 0;
     }
 
-    if (size >= BUFSIZE) {
+    if (file_size >= BUFSIZE) {
         snprintf(log_msg, BUFSIZE, "Size Too Big.\n");
         write_log(log_msg);
         return 0;
     }
-    buffer[size] = '\0';
+    buffer[file_size] = '\0';
     long len = strtol(buffer, NULL, 10);
 
-    for (; len > BUFSIZE; len -= size) {
-        if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
+    for (; len > BUFSIZE; len -= chunk_size) {
+        if ((chunk_size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
             snprintf(log_msg, BUFSIZE, "Error Receiving File Data. ID: %s\n", strerror(errno));
             write_log(log_msg);
             return 0;
         }
-        fwrite(buffer, sizeof(char), size, fp);
+        if (chunk_size == 0) {
+            return 0;
+        }
+        fwrite(buffer, sizeof(char), chunk_size, fp);
     }
 
     while (len > 0) {
-        if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
+        if ((chunk_size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
             snprintf(log_msg, BUFSIZE, "Error Receiving File Data. ID: %s\n", strerror(errno));
             write_log(log_msg);
             return 0;
         }
-        fwrite(buffer, sizeof(char), size, fp);
-        len -= size;
+        if (chunk_size == 0) {
+            return 0;
+        }
+        fwrite(buffer, sizeof(char), chunk_size, fp);
+        len -= chunk_size;
     }
 
     snprintf(log_msg, BUFSIZE, "File Received Successfully.\n");
@@ -277,11 +289,9 @@ char* get_path(const char* dir) {
     }
     memset(full_dir, 0, dir_len);
 
-    strcat(full_dir, cwd);
-    strcat(full_dir, "/");
+    snprintf(full_dir, dir_len, "%s/", cwd);
     if (dir != NULL) {
-        strcat(full_dir, dir);
-        strcat(full_dir, "/\0");
+        snprintf(full_dir, dir_len, "%s%s/", full_dir, dir);
     }
 
     free(cwd);

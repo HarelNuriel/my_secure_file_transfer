@@ -14,7 +14,7 @@ int set_auth_path(const char *path) {
 
 char* prepare_creds(const char *name, const char *passwd) {
     // TODO: Later on when hash is implemented replace length with a const value
-    char *buffer = malloc(sizeof(char) * (strlen(name) + strlen(passwd) + 3));
+    char *buffer = malloc(sizeof(char) * (CRED_SIZE + 1));
     if (buffer == NULL) {
         char log[BUFSIZE];
         snprintf(log, BUFSIZE, "Couldn't Allocate Memory. ID: %s\n", strerror(errno));
@@ -23,16 +23,16 @@ char* prepare_creds(const char *name, const char *passwd) {
     }
 
     // TODO: Later on when hash is implemented replace length with a const value
-    strncpy(buffer, name, strlen(name) + 1);
-    strcat(buffer, ":");
-    strncat(buffer, passwd, strlen(passwd) + 1);
-    strcat(buffer, "\n");
+    char *name_hash = sha256(name), *passwd_hash = sha256(passwd);
+    snprintf(buffer, CRED_SIZE + 1, "%s:%s", name_hash, passwd_hash);
 
+    free(name_hash);
+    free(passwd_hash);
     return buffer;
 }
 
-int add_user(const char *name, const char *passwd) {
-    if (name == NULL || passwd == NULL) {
+int add_user(const char *hash) {
+    if (hash == NULL) {
         write_log("Invalid Username or Password.");
         free_auth();
         return 0;
@@ -46,16 +46,10 @@ int add_user(const char *name, const char *passwd) {
         return 0;
     }
 
-    char *creds = prepare_creds(name, passwd);
-    if (creds == NULL) {
-        write_log("Error Preparing Credentials.");
-        return 0;
-    }
-
-    fprintf(fp, "%s", creds);
+    fprintf(fp, "%s", hash);
+    fprintf(fp, "\n");
 
     fclose(fp);
-    free(creds);
     return 1;
 }
 
@@ -77,8 +71,7 @@ int auth_ready() {
         free(auth_path);
         return 0;
     }
-    strcpy(passwd_path, auth_path);
-    strcat(passwd_path, PASSWD_FILE);
+    snprintf(passwd_path, strlen(auth_path) + strlen(PASSWD_FILE) + 2, "%s%s", auth_path, PASSWD_FILE);
 
     if (access(passwd_path, F_OK) != 0) {
         DIR *d = opendir(auth_path);
@@ -104,13 +97,17 @@ int auth_ready() {
         fclose(fp);
         closedir(d);
 
-        if (!add_user("admin", "admin")) {
+        char *hash = prepare_creds("admin", "admin");
+
+        if (!add_user(hash)) {
             char buffer[BUFSIZE];
             snprintf(buffer, BUFSIZE, "Could Not Create File With Default Credentials. ID: %s\n", strerror(errno));
             write_log(buffer);
+            free(hash);
             free_auth();
             return 0;
         }
+        free(hash);
     }
 
     return 1;
@@ -121,33 +118,31 @@ void free_auth() {
     free(auth_path);
 }
 
-int validate_auth_user(const char *name, const char *passwd) {
-    char *creds = prepare_creds(name, passwd);
-    if (creds == NULL) {
-        write_log("Error Preparing Credentials.");
+int validate_auth_user(const char *hash) {
+    //char *creds = prepare_creds(name, passwd);
+    if (hash == NULL) {
+        write_log("Hash is NULL.\n");
         return 0;
     }
 
     FILE *fp = fopen(passwd_path, "r");
     if (fp == NULL) {
         char buffer[BUFSIZE];
-        snprintf(buffer, BUFSIZE, "Error Opening %s, ID: %s", passwd_path, strerror(errno));
+        snprintf(buffer, BUFSIZE, "Error Opening %s, ID: %s\n", passwd_path, strerror(errno));
         write_log(buffer);
-        free(creds);
         return 0;
     }
 
     char buffer[BUFSIZE];
     while (fgets(buffer, BUFSIZE, fp)) {
+        buffer[strcspn(buffer, "\n")] = '\0';
         // TODO: After implementing hash replace with strncmp
-        if (strcmp(creds, buffer) == 0) {
+        if (strncmp(hash, buffer, CRED_SIZE) == 0) {
             fclose(fp);
-            free(creds);
             return VALID_CREDS;
         }
     }
 
-    free(creds);
     fclose(fp);
     return INVALID_CREDS;
 }

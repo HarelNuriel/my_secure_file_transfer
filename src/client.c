@@ -96,7 +96,7 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     }
 
     ssize_t size;
-    if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
+    if ((size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return;
@@ -110,7 +110,7 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     buffer[size] = '\0';
     const long file_num = strtol(buffer, NULL, 10);
     for (int i = 0; i < file_num; i++) {
-        if ((size = recv_packet(sock, buffer)) == SOCKET_ERROR) {
+        if ((size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
             snprintf(log_msg, BUFSIZE, "Error Receiving The File's Name. ID: %s\n", strerror(errno));
             write_log(log_msg);
             return;
@@ -192,11 +192,9 @@ unsigned int auth(const int sock) {
     fgets(passwd, BUFSIZE, stdin);
     passwd[strcspn(passwd, "\n")] = '\0';
 
-    if (send_packet(sock, name, strlen(name)) == SOCKET_ERROR) {
-        printf("Error Sending The Username. ID: %s\n", strerror(errno));
-        return 0;
-    }
-    if (send_packet(sock, passwd, strlen(passwd)) == SOCKET_ERROR) {
+    char *hash = prepare_creds(name, passwd);
+
+    if (send_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
         printf("Error Sending The Username. ID: %s\n", strerror(errno));
         return 0;
     }
@@ -205,6 +203,7 @@ unsigned int auth(const int sock) {
         printf("Error Receiving Answer. ID: %s\n", strerror(errno));
     }
 
+    free(hash);
     return ntohl(is_valid);
 }
 

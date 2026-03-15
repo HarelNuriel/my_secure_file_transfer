@@ -170,7 +170,7 @@ int read_socket(const int sock) {
     char buffer[BUFSIZE], log_msg[BUFSIZE];
 
     while (1) {
-        if ((len = recv_packet(sock, buffer)) == SOCKET_ERROR) {
+        if ((len = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
             snprintf(log_msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
             write_log(log_msg);
             continue;
@@ -223,8 +223,7 @@ int setup() {
     }
 
     char *log_file_path = malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
-    strcpy(log_file_path, LOG_PATH);
-    strcat(log_file_path, LOG_FILE);
+    snprintf(log_file_path, strlen(LOG_PATH) + strlen(LOG_FILE) + 1, "%s%s", LOG_PATH, LOG_FILE);
     if (access(log_file_path, F_OK) != 0) {
         DIR *d = opendir(LOG_PATH);
         if (d == NULL) {
@@ -258,26 +257,18 @@ int setup() {
 
 // TODO: After hash implementation refactor with known lengths.
 unsigned int auth_user(const int sock) {
-    char name[BUFSIZE], passwd[BUFSIZE];
+    char hash[CRED_SIZE];
     unsigned int is_valid = htonl(INVALID_CREDS);
 
-    if (recv_packet(sock, name) == SOCKET_ERROR) {
-        snprintf(name, BUFSIZE, "Error Receiving Username. ID: %s\n", strerror(errno));
-        write_log(name);
+    if (recv_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
+        snprintf(hash, CRED_SIZE, "Error Receiving Hash. ID: %s\n", strerror(errno));
+        write_log(hash);
         is_valid = htonl(0);
         send(sock, &is_valid, sizeof(int), 0);
         return SOCKET_ERROR;
     }
 
-    if (recv_packet(sock, passwd) == SOCKET_ERROR) {
-        snprintf(passwd, BUFSIZE, "Error Receiving Username. ID: %s\n", strerror(errno));
-        write_log(passwd);
-        is_valid = htonl(0);
-        send(sock, &is_valid, sizeof(int), 0);
-        return SOCKET_ERROR;
-    }
-
-    if (validate_auth_user(name, passwd) == VALID_CREDS) {
+    if (validate_auth_user(hash) == VALID_CREDS) {
         is_valid = htonl(VALID_CREDS);
     }
 
