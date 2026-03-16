@@ -161,7 +161,7 @@ int send_file(const int sock, const char *file_name) {
     if (size == -1) {
         return 0;
     }
-    const unsigned int len = snprintf(s_size, BUFSIZE, "%ld", size);
+    unsigned int len = snprintf(s_size, BUFSIZE, "%ld", size);
 
     if (send_packet(sock, s_size, len) ==  SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Sending The File Size. ID: %s\n", strerror(errno));
@@ -169,25 +169,21 @@ int send_file(const int sock, const char *file_name) {
         return 0;
     }
 
-    for (; size > BUFSIZE; size -= BUFSIZE) {
-        if (fread(buffer, sizeof(char), BUFSIZE, fp)) {
-            if (send_packet(sock, buffer, BUFSIZE) == SOCKET_ERROR) {
+    long f_size = 0;
+    for (; size > 0; size -= len) {
+        f_size = size > BUFSIZE ? BUFSIZE : size;
+        if ((len = fread(buffer, sizeof(char), f_size, fp)) > 0) {
+            if (send_packet(sock, buffer, len) == SOCKET_ERROR) {
                 snprintf(log_msg, BUFSIZE, "Error Sending The File. ID: %s\n", strerror(errno));
                 write_log(log_msg);
                 return 0;
             }
+        } else {
+            break;
         }
     }
 
-    if (size > 0) {
-        if (fread(buffer, sizeof(char), size, fp)) {
-            if (send_packet(sock, buffer, size) == SOCKET_ERROR) {
-                snprintf(log_msg, BUFSIZE, "Error Sending The File. ID: %s\n", strerror(errno));
-                write_log(log_msg);
-                return 0;
-            }
-        }
-    } else if (ferror(fp)) {
+    if (ferror(fp)) {
         snprintf(log_msg, BUFSIZE, "File reading error. ID: %s\n", strerror(errno));
         write_log(log_msg);
     }
@@ -219,6 +215,10 @@ int recv_file(const int sock, const char *file_name) {
         write_log(log_msg);
         return 0;
     }
+    if (file_size <= 0) {
+        return (int)file_size;
+    }
+
     buffer[file_size] = '\0';
     long len = strtol(buffer, NULL, 10);
 
@@ -274,7 +274,7 @@ void set_log_stream(FILE *stream) {
 }
 
 char* get_path(const char* dir) {
-    char *cwd = getcwd(NULL, 0);
+    char *cwd = getcwd(NULL, 0), *full_dir;
     if (cwd == NULL) {
         char buffer[BUFSIZE];
         snprintf(buffer, BUFSIZE, "Error Getting cwd: ID: %s\n", strerror(errno));
@@ -282,16 +282,20 @@ char* get_path(const char* dir) {
         return NULL;
     }
 
-    const size_t dir_len = strlen(cwd) + strlen(dir) + 4;
-    char *full_dir = malloc(sizeof(char) * dir_len);
-    if (full_dir == NULL) {
-        return NULL;
-    }
-    memset(full_dir, 0, dir_len);
-
-    snprintf(full_dir, dir_len, "%s/", cwd);
+    size_t dir_len = strlen(cwd) + 4;
     if (dir != NULL) {
-        snprintf(full_dir, dir_len, "%s%s/", full_dir, dir);
+        dir_len += strlen(dir);
+        full_dir = malloc(sizeof(char) * dir_len);
+        if (full_dir == NULL) {
+            return NULL;
+        }
+        snprintf(full_dir, dir_len, "%s/%s/", cwd, dir);
+    } else {
+        full_dir = malloc(sizeof(char) * dir_len);
+        if (full_dir == NULL) {
+            return NULL;
+        }
+        snprintf(full_dir, dir_len, "%s/", cwd);
     }
 
     free(cwd);

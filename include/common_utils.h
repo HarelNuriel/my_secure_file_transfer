@@ -16,6 +16,7 @@
 #define BUFSIZE 1024
 #define INVALID_SOCKET (-1)
 #define SOCKET_ERROR (-1)
+#define UNKNOWN_CMD (-2)
 #define TCP 0
 #define IP "127.0.0.1\0"
 #define PORT 4444

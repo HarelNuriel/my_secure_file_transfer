@@ -10,18 +10,22 @@
 
 #define PASSWD_FILE "users.txt"
 #define VALID_CREDS 1
+#define PRIVILEGES_OK 1
 #define INVALID_CREDS (-2)
+#define INSUFFICIENT_PRIVILEGES (-3)
 
 int auth_ready();
 void free_auth();
-char* prepare_creds(const char *name, const char *passwd);
-int validate_auth_user(const char *hash);
-int add_user(const char *hash);
+char* prepare_creds(char *name, char *passwd);
+int validate_auth_user(char *hash);
+int add_user(char *hash, int privileges);
+int rm_user(char *name_hash);
+int change_privileges(char *hash, int privileges);
 
 struct user {
-    char *name;
+    int sock;
     unsigned long long key;
-    unsigned char priv;
+    unsigned int privilege;
 };
 
 typedef  enum {

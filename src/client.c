@@ -34,14 +34,29 @@ void help() {
     char *help = "Commands:\n\n"
                  "get [file]\t\tGets a file from the server.\n"
                  "set [file]\t\tUploads a file to the server.\n"
-                 "ls\t\t\tLists all files in the servers directory.\n"
-                 "help\t\t\tPrints this message.\n";
+                 "ls\t\t\t\tLists all files in the servers directory.\n"
+                 "help\t\t\tPrints this message.\n"
+                 "\nadd_user [name] [password] [privileges]\n"
+                 "\t\t\t\tAdd User.\n\n"
+                 "rm_user [name]\tRemove User.\n"
+                 "\nchmod [name] [privilege]\n"
+                 "\t\t\t\tChange User [name]'s Privileges (1 read, 2 write, 4 modify users, 7 admin).\n\n";
     printf("%s", help);
 }
 
+void handle_error(const int err) {
+    if (err == 0) {
+        printf("Server Disconnected.\n");
+    } else if (err == UNKNOWN_CMD) {
+        printf("Unknown Command.\n");
+    } else if (err == INSUFFICIENT_PRIVILEGES) {
+        printf("Insufficient Privileges.\n");
+    }
+}
+
 void get(const int sock, const char input[BUFSIZE]) {
-    char log_msg[BUFSIZE];
-    char *file_name = get_arg(input);
+    char log_msg[BUFSIZE], *file_name = get_arg(input);
+    int flag;
     if (file_name == NULL) {
         write_log("Invalid Argument.\n");
         return;
@@ -51,6 +66,11 @@ void get(const int sock, const char input[BUFSIZE]) {
         snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n", strerror(errno));
         write_log(log_msg);
         free(file_name);
+        return;
+    }
+    recv(sock, &flag, sizeof(int), 0);
+    if ((flag = (int)ntohl(flag)) != PRIVILEGES_OK) {
+        handle_error(flag);
         return;
     }
 
@@ -64,8 +84,8 @@ void get(const int sock, const char input[BUFSIZE]) {
 }
 
 void set(const int sock, const char input[BUFSIZE]) {
-    char log_msg[BUFSIZE];
-    char *file_name = get_arg(input);
+    char log_msg[BUFSIZE], *file_name = get_arg(input);;
+    int flag;
     if (file_name == NULL) {
         write_log("Invalid Argument.\n");
         return;
@@ -75,6 +95,11 @@ void set(const int sock, const char input[BUFSIZE]) {
         snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n", strerror(errno));
         write_log(log_msg);
         free(file_name);
+        return;
+    }
+    recv(sock, &flag, sizeof(int), 0);
+    if ((flag = (int)ntohl(flag)) != PRIVILEGES_OK) {
+        handle_error(flag);
         return;
     }
 
@@ -89,13 +114,19 @@ void set(const int sock, const char input[BUFSIZE]) {
 
 void list_dir(const int sock, char input[BUFSIZE]) {
     char log_msg[BUFSIZE], buffer[BUFSIZE];
+    int flag;
+    ssize_t size;
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Sending The Command. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return;
     }
+    recv(sock, &flag, sizeof(int), 0);
+    if ((flag = (int)ntohl(flag)) != PRIVILEGES_OK) {
+        handle_error(flag);
+        return;
+    }
 
-    ssize_t size;
     if ((size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
         write_log(log_msg);
@@ -128,6 +159,18 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     write_log(log_msg);
 }
 
+void cmd_add_user(const int sock, char input[BUFSIZE]) {
+    // TODO: Implement.
+}
+
+void cmd_rm_user(const int sock, char input[BUFSIZE]) {
+    // TODO: Implement.
+}
+
+void cmd_chmod(const int sock, char input[BUFSIZE]) {
+    // TODO: Implement.
+}
+
 int process_cmd(char input[BUFSIZE], const int sock) {
     char *cmd = get_method(input), log_msg[BUFSIZE];
     if (cmd == NULL) {
@@ -143,6 +186,12 @@ int process_cmd(char input[BUFSIZE], const int sock) {
         set(sock, input);
     } else if (strcmp(cmd, "ls") == 0) {
         list_dir(sock, input);
+    } else if (strcmp(cmd, "add_user") == 0) {
+        cmd_add_user(sock, input);
+    } else if (strcmp(cmd, "rm_user") == 0) {
+        cmd_rm_user(sock, input);
+    } else if (strcmp(cmd, "chmod") == 0) {
+        cmd_chmod(sock, input);
     } else if (strcmp(cmd, "exit") == 0) {
         free(cmd);
         if (send_packet(sock, "exit\0", (int)strlen("exit\0")) == SOCKET_ERROR) {
@@ -167,18 +216,17 @@ int process_cmd(char input[BUFSIZE], const int sock) {
     return 1;
 }
 
-void session(const int sock) {
+void session(struct user *c_session) {
     int flag = 1;
     char buffer[BUFSIZE];
 
     while (flag) {
         write_log("> ");
         fgets(buffer, BUFSIZE, stdin);
-        flag = process_cmd(buffer, sock);
+        flag = process_cmd(buffer, c_session->sock);
     }
 }
 
-// TODO: After hash implementation refactor with known lengths.
 unsigned int auth(const int sock) {
     char name[BUFSIZE], passwd[BUFSIZE];
     int is_valid = 0;
@@ -229,7 +277,10 @@ void client(char *ip, int port) {
         }
     }
     if (is_valid == VALID_CREDS) {
-        session(sock);
+        printf("Successfully Logged In.\n");
+        struct user c_session;
+        c_session.sock = sock;
+        session(&c_session);
     }
 
     free(ip);

@@ -165,12 +165,36 @@ void ls(const int sock, char input[BUFSIZE]) {
     }
 }
 
-int read_socket(const int sock) {
+int validate_privilege(const struct user *session, const int privilege) {
+    unsigned int flag;
+    if ((session->privilege & privilege) != privilege) {
+        flag = htonl(INSUFFICIENT_PRIVILEGES);
+        send(session->sock, &flag, sizeof(int), 0);
+        return 0;
+    }
+    flag = htonl(PRIVILEGES_OK);
+    send(session->sock, &flag, sizeof(int), 0);
+    return 1;
+}
+
+void proc_add_user(const int sock, char input[BUFSIZE]) {
+    // TODO: Implement.
+}
+
+void proc_rm_user(const int sock, char input[BUFSIZE]) {
+    // TODO: Implement.
+}
+
+void proc_chmod(const int sock, char input[BUFSIZE]) {
+    // TODO: Implement.
+}
+
+int read_socket(const struct user *session) {
     ssize_t len;
     char buffer[BUFSIZE], log_msg[BUFSIZE];
 
     while (1) {
-        if ((len = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
+        if ((len = recv_packet(session->sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
             snprintf(log_msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
             write_log(log_msg);
             continue;
@@ -187,21 +211,49 @@ int read_socket(const int sock) {
             write_log(log_msg);
             method = get_method(buffer);
         } else {
+            unsigned int flag = htonl(UNKNOWN_CMD);
+            send(session->sock, &flag, sizeof(int), 0);
             continue;
         }
 
         if (method == NULL) {
             snprintf(log_msg, BUFSIZE, "Unknown Command.\n");
             write_log(log_msg);
+            unsigned int flag = htonl(UNKNOWN_CMD);
+            send(session->sock, &flag, sizeof(int), 0);
             continue;
         }
 
         if (strcmp(method, "get") == 0) {
-            send_file_to_client(sock, buffer);
+            if (!validate_privilege(session, PRIV_READ)) {
+                continue;
+            }
+            send_file_to_client(session->sock, buffer);
         } else if (strcmp(method, "set") == 0) {
-            recv_file_from_client(sock, buffer);
+            if (!validate_privilege(session, PRIV_WRITE)) {
+                continue;
+            }
+            recv_file_from_client(session->sock, buffer);
         } else if (strcmp(method, "ls") == 0) {
-            ls(sock, buffer);
+            if (!validate_privilege(session, PRIV_READ)) {
+                continue;
+            }
+            ls(session->sock, buffer);
+        } else if (strcmp(method, "add_user") == 0) {
+            if (!validate_privilege(session, PRIV_EDIT_USERS)) {
+                continue;
+            }
+            proc_add_user(session->sock, buffer);
+        } else if (strcmp(method, "rm_user") == 0) {
+            if (!validate_privilege(session, PRIV_EDIT_USERS)) {
+                continue;
+            }
+            proc_rm_user(session->sock, buffer);
+        } else if (strcmp(method, "chmod") == 0) {
+            if (!validate_privilege(session, PRIV_EDIT_USERS)) {
+                continue;
+            }
+            proc_chmod(session->sock, buffer);
         } else if (strcmp(method, "exit") == 0) {
             free(method);
             return 0;
@@ -221,6 +273,7 @@ int setup() {
         write_log("Error Setting Up Auth.\n");
         return 0;
     }
+    write_log("Auth Setup Complete.\n");
 
     char *log_file_path = malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
     snprintf(log_file_path, strlen(LOG_PATH) + strlen(LOG_FILE) + 1, "%s%s", LOG_PATH, LOG_FILE);
@@ -255,10 +308,9 @@ int setup() {
     return 1;
 }
 
-// TODO: After hash implementation refactor with known lengths.
-unsigned int auth_user(const int sock) {
+unsigned int auth_user(const int sock, struct user *user_session) {
     char hash[CRED_SIZE];
-    unsigned int is_valid = htonl(INVALID_CREDS);
+    unsigned int priv, is_valid = htonl(INVALID_CREDS);
 
     if (recv_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
         snprintf(hash, CRED_SIZE, "Error Receiving Hash. ID: %s\n", strerror(errno));
@@ -268,7 +320,7 @@ unsigned int auth_user(const int sock) {
         return SOCKET_ERROR;
     }
 
-    if (validate_auth_user(hash) == VALID_CREDS) {
+    if ((priv = validate_auth_user(hash)) > 0) {
         is_valid = htonl(VALID_CREDS);
     }
 
@@ -278,7 +330,7 @@ unsigned int auth_user(const int sock) {
         write_log(buffer);
     }
 
-    return ntohl(is_valid);
+    return priv;
 }
 
 void server(char *ip, int port) {
@@ -286,6 +338,7 @@ void server(char *ip, int port) {
         write_log("Couldn't Finish Setup.\n");
         return;
     }
+    write_log("Finished Setup.\n");
 
     if (port == 0) {
         port = PORT;
@@ -309,7 +362,6 @@ void server(char *ip, int port) {
     }
 
     int flag, i;
-    unsigned int is_valid;
     while (1) {
         i = 0;
         client = accept(sock, NULL, NULL);
@@ -317,12 +369,14 @@ void server(char *ip, int port) {
             write_log("Client Socket Error.\n");
             continue;
         }
-        // TODO: auth client and start secure session.
-        while ((is_valid = auth_user(client)) != VALID_CREDS && i < 3) {
+
+        struct user user_session;
+        while ((user_session.privilege = auth_user(client, &user_session)) <= 0 && i < 3) {
             i++;
         }
-        if (is_valid == VALID_CREDS) {
-            flag = read_socket(client);
+        if (user_session.privilege > 0) {
+            user_session.sock = client;
+            flag = read_socket(&user_session);
             if (flag == -1) {
                 close_log_stream();
                 close(sock);
