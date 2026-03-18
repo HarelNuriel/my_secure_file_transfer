@@ -24,6 +24,7 @@
 
 int get_command_len(const char input[BUFSIZE]);
 char* get_method(const char input[BUFSIZE]);
+char** get_args(char input[BUFSIZE], int *argc);
 char* get_arg(const char input[BUFSIZE]);
 long get_file_size(const char *file_name);
 int send_file(int sock, const char *file_name);

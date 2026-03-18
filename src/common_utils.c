@@ -6,6 +6,54 @@
 
 static FILE *log_stream;
 
+char** get_args(char input[BUFSIZE], int *argc) {
+    int cmd_len = get_command_len(input);
+    if (cmd_len >= strlen(input)) {
+        write_log("Invalid Argument.\n");
+        return NULL;
+    }
+
+    while (input[cmd_len] == ' ') cmd_len++;
+    if (strlen(input) == cmd_len + 1) {
+        *argc = 0;
+        return NULL;
+    }
+
+    size_t len, max_args = 16;
+    char **argv = malloc(sizeof(char*) * 16), *temp = input + cmd_len;
+    while ((len = strcspn(temp, " ")) != strlen(temp)) {
+        if (len == 0) {
+            temp++;
+            continue;
+        }
+        argv[*argc] = malloc(sizeof(char) * len + 1);
+        snprintf(argv[*argc], len + 1, "%s", temp);
+        temp += len + 1;
+        (*argc)++;
+
+        if (*argc >= max_args) {
+            max_args += 16;
+            char **tmp = realloc(argv, sizeof(char*) * max_args);
+            if (tmp == NULL) {
+                char log_msg[BUFSIZE];
+                snprintf(log_msg, BUFSIZE, "Error Reallocating Memory. ID: %s.\n", strerror(errno));
+                write_log(log_msg);
+                free_double_pointer(argv, *argc);
+                return NULL;
+            }
+            argv = tmp;
+        }
+    }
+    if (len > 0 && temp[0] != '\n') {
+        argv[*argc] = malloc(sizeof(char) * len + 1);
+        snprintf(argv[*argc], len + 1, "%s", temp);
+        argv[*argc][strcspn(argv[*argc], "\n")] = '\0';
+        (*argc)++;
+    }
+
+    return argv;
+}
+
 char* get_arg(const char input[BUFSIZE]) {
     int cmd_len = get_command_len(input);
     char log_msg[BUFSIZE];

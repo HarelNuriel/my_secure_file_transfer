@@ -16,11 +16,11 @@
 
 int auth_ready();
 void free_auth();
-char* prepare_creds(char *name, char *passwd);
-int validate_auth_user(char *hash);
-int add_user(char *hash, int privileges);
-int rm_user(char *name_hash);
-int change_privileges(char *hash, int privileges);
+char* prepare_creds(const char *name, const char *passwd);
+int validate_auth_user(const char *hash);
+int add_user(const char *hash, int privileges);
+int rm_user(const char *name_hash, int id);
+int change_privileges(const char *name_hash, int privileges, int id);
 
 struct user {
     int sock;

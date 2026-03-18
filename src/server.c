@@ -178,15 +178,100 @@ int validate_privilege(const struct user *session, const int privilege) {
 }
 
 void proc_add_user(const int sock, char input[BUFSIZE]) {
-    // TODO: Implement.
+    unsigned int flag;
+    int argc = 0;
+    char log_msg[BUFSIZE], **argv = get_args(input, &argc);
+    if (argv == NULL || argc < 3) {
+        snprintf(log_msg, BUFSIZE, "Invalid Arguments. %d\n", argc);
+        write_log(log_msg);
+        if (argv != NULL) free_double_pointer(argv, argc);
+        return;
+    }
+    snprintf(log_msg, BUFSIZE, "Adding User %s:%s.\n", argv[0], argv[1]);
+    write_log(log_msg);
+
+    for (int i = 0; i < 3; i++) {
+        if (argv[i] == NULL) {
+            snprintf(log_msg, BUFSIZE, "Argument %d is invalid.\n", i);
+            write_log(log_msg);
+            free_double_pointer(argv, i - 1);
+            return;
+        }
+    }
+
+    int priv = (int)strtol(argv[2], NULL, 10);
+    char *creds = prepare_creds(argv[0], argv[1]);
+
+    if ((flag = add_user(creds, priv))) {
+        snprintf(log_msg, BUFSIZE, "Added User %s Successfully.\n", argv[0]);
+    } else {
+        snprintf(log_msg, BUFSIZE, "Could not Add User %s.\n", argv[0]);
+    }
+
+    flag = htonl(flag);
+    write_log(log_msg);
+    send(sock, &flag, sizeof(int), 0);
+    free(creds);
+    free_double_pointer(argv, argc);
 }
 
 void proc_rm_user(const int sock, char input[BUFSIZE]) {
-    // TODO: Implement.
+    char log_msg[BUFSIZE], *name = get_arg(input);
+    unsigned int flag;
+    if (name == NULL) {
+        write_log("Invalid Argument.\n");
+        return;
+    }
+
+    char *name_hash = sha256(name);
+    // TODO: When added theads add thread_id var that will set the id val
+    if ((flag = rm_user(name_hash, 0))) {
+        snprintf(log_msg, BUFSIZE, "Remove User %s Successfully.\n", name);
+    } else {
+        snprintf(log_msg, BUFSIZE, "Could not Remove User %s.\n", name);
+    }
+
+    flag = htonl(flag);
+    write_log(log_msg);
+    send(sock, &flag, sizeof(int), 0);
+    free(name_hash);
+    free(name);
 }
 
 void proc_chmod(const int sock, char input[BUFSIZE]) {
-    // TODO: Implement.
+    int argc = 0;
+    char log_msg[BUFSIZE], **argv = get_args(input, &argc);
+    unsigned int flag;
+    if (argv == NULL || argc < 2) {
+        snprintf(log_msg, BUFSIZE, "Invalid Arguments. %d\n", argc);
+        write_log(log_msg);
+        if (argv != NULL) free_double_pointer(argv, argc);
+        return;
+    }
+
+    for (int i = 0; i < 2; i++) {
+        if (argv[i] == NULL) {
+            snprintf(log_msg, BUFSIZE, "Argument %d is invalid.\n", i);
+            write_log(log_msg);
+            free_double_pointer(argv, i - 1);
+            return;
+        }
+    }
+
+    int priv = (int)strtol(argv[1], NULL, 10);
+    char *name_hash = sha256(argv[0]);
+    // TODO: When added theads add thread_id var that will set the id val
+    if ((flag = change_privileges(name_hash, priv, 0))) {
+        snprintf(log_msg, BUFSIZE, "Changed User %s Privileges Successfully.\n", argv[0]);
+    } else {
+        snprintf(log_msg, BUFSIZE, "Could not Change User %s Privileges.\n", argv[0]);
+    }
+
+    flag = htonl(flag);
+    write_log(log_msg);
+    send(sock, &flag, sizeof(int), 0);
+    free(name_hash);
+    free(argv);
 }
 
 int read_socket(const struct user *session) {
@@ -207,7 +292,7 @@ int read_socket(const struct user *session) {
         // TODO: Accept commands larger than BUFSIZE.
         if (len < BUFSIZE) {
             buffer[len] = '\0';
-            snprintf(log_msg, BUFSIZE, "Received command: %s\n", buffer);
+            snprintf(log_msg, BUFSIZE, "Received Input: %s\n", buffer);
             write_log(log_msg);
             method = get_method(buffer);
         } else {
@@ -243,6 +328,8 @@ int read_socket(const struct user *session) {
             if (!validate_privilege(session, PRIV_EDIT_USERS)) {
                 continue;
             }
+            snprintf(log_msg, BUFSIZE, "Processing Command: %s\n", method);
+            write_log(log_msg);
             proc_add_user(session->sock, buffer);
         } else if (strcmp(method, "rm_user") == 0) {
             if (!validate_privilege(session, PRIV_EDIT_USERS)) {
@@ -310,7 +397,8 @@ int setup() {
 
 unsigned int auth_user(const int sock, struct user *user_session) {
     char hash[CRED_SIZE];
-    unsigned int priv, is_valid = htonl(INVALID_CREDS);
+    int priv;
+    unsigned int is_valid = htonl(INVALID_CREDS);
 
     if (recv_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
         snprintf(hash, CRED_SIZE, "Error Receiving Hash. ID: %s\n", strerror(errno));

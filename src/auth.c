@@ -63,8 +63,7 @@ int validate_auth_user(const char *hash) {
 
 int add_user(const char *hash, const int privileges) {
     if (hash == NULL) {
-        write_log("Invalid Username or Password.");
-        free_auth();
+        write_log("Invalid hash.");
         return 0;
     }
 
@@ -148,10 +147,77 @@ void free_auth() {
     free(auth_path);
 }
 
-int rm_user(char *name_hash) {
-    // TODO: Implement.
+int rm_user(const char *name_hash, const int id) {
+    if (name_hash == NULL) {
+        write_log("Invalid hash.");
+        return 0;
+    }
+
+    const size_t len = strlen(auth_path) + 6;
+    char buffer[BUFSIZE], *temp_path = malloc(sizeof(char) * len);
+    snprintf(temp_path, len, "%stemp_id", auth_path);
+
+    FILE *p_file = fopen(passwd_path, "r");
+    FILE *temp = fopen(temp_path, "w");
+    if (p_file == NULL || temp == NULL) {
+        snprintf(buffer, BUFSIZE, "Couldn't Open %s or %s. ID: %s\n", passwd_path, temp_path, strerror(errno));
+        write_log(buffer);
+        free(temp_path);
+        if (p_file != NULL) fclose(p_file);
+        return 0;
+    }
+
+    while (fgets(buffer, BUFSIZE, p_file) > 0) {
+        if (strncmp(name_hash, buffer, SHA256_SIZE) == 0) {
+            continue;
+        }
+        fprintf(temp, "%s", buffer);
+    }
+
+    fclose(temp);
+    fclose(p_file);
+    remove(passwd_path);
+    rename(temp_path, passwd_path);
+
+    free(temp_path);
+    return 1;
 }
 
-int change_privileges(char *hash, int privileges) {
-    // TODO: Implement.
+int change_privileges(const char *name_hash, const int privileges, const int id) {
+    if (name_hash == NULL) {
+        write_log("Invalid hash.");
+        return 0;
+    }
+
+    const size_t len = strlen(auth_path) + 6;
+    char buffer[BUFSIZE], *temp_path = malloc(sizeof(char) * len);
+    snprintf(temp_path, len, "%stemp_%d", auth_path, id);
+
+    FILE *p_file = fopen(passwd_path, "r");
+    FILE *temp = fopen(temp_path, "w");
+    if (p_file == NULL || temp == NULL) {
+        snprintf(buffer, BUFSIZE, "Couldn't Open %s or %s. ID: %s\n", passwd_path, temp_path, strerror(errno));
+        write_log(buffer);
+        free(temp_path);
+        if (p_file != NULL) fclose(p_file);
+        return 0;
+    }
+
+    char creds[BUFSIZE];
+    while (fgets(buffer, BUFSIZE, p_file) > 0) {
+        if (strncmp(name_hash, buffer, SHA256_SIZE) == 0) {
+            snprintf(creds, CRED_SIZE, "%s", buffer);
+            snprintf(buffer, BUFSIZE, "%s:%d\n", creds, privileges);
+            write_log(buffer);
+        }
+        fprintf(temp, "%s", buffer);
+    }
+
+    fclose(temp);
+    fclose(p_file);
+    remove(passwd_path);
+    rename(temp_path, passwd_path);
+
+    free(temp_path);
+    return 1;
 }

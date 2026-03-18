@@ -42,19 +42,18 @@ char* format(unsigned int h[]) {
 }
 
 unsigned char* padding(const char *str, size_t *len) {
-    if (strlen(str) % SHA256_SIZE < 56) {
-        *len = (strlen(str) / SHA256_SIZE + 1) * SHA256_SIZE;
+    const size_t size = strlen(str);
+    if (size % SHA256_SIZE < 56) {
+        *len = (size / SHA256_SIZE + 1) * SHA256_SIZE;
     } else {
-        *len = (strlen(str) / SHA256_SIZE + 2) * SHA256_SIZE;
+        *len = (size / SHA256_SIZE + 2) * SHA256_SIZE;
     }
 
-    unsigned char *padded_str = malloc(sizeof(char) * (*len)), *temp = padded_str;
-    memset(padded_str, 0, *len);
+    unsigned char *padded_str = calloc(*len, sizeof(char)), *temp = padded_str;
+    memcpy(padded_str, str, size);
+    padded_str[size] = 128;
 
-    memcpy(padded_str, str, strlen(str));
-    padded_str[strlen(str)] = 128;
-
-    const unsigned long str_len = strlen(str) * 8;
+    const unsigned long str_len = size * 8;
     temp += *len - 8;
     for (int i = 0; i < 8; i++) {
         temp[i] = (str_len >> ((7 - i) * 8)) & 0xff;

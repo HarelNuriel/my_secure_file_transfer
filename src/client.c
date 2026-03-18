@@ -54,6 +54,7 @@ void handle_error(const int err) {
     }
 }
 
+// TODO: Redactor with send_cmd and get_args
 void get(const int sock, const char input[BUFSIZE]) {
     char log_msg[BUFSIZE], *file_name = get_arg(input);
     int flag;
@@ -83,8 +84,9 @@ void get(const int sock, const char input[BUFSIZE]) {
     free(file_name);
 }
 
+// TODO: Redactor with send_cmd and get_args
 void set(const int sock, const char input[BUFSIZE]) {
-    char log_msg[BUFSIZE], *file_name = get_arg(input);;
+    char log_msg[BUFSIZE], *file_name = get_arg(input);
     int flag;
     if (file_name == NULL) {
         write_log("Invalid Argument.\n");
@@ -159,16 +161,70 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     write_log(log_msg);
 }
 
+int send_cmd(const int sock, char input[BUFSIZE]) {
+    char log_msg[BUFSIZE];
+    int flag;
+
+    if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Error sending add. ID: %s\n", strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+    recv(sock, &flag, sizeof(int), 0);
+    if ((flag = (int)ntohl(flag)) != PRIVILEGES_OK) {
+        handle_error(flag);
+        return 0;
+    }
+
+    if (recv(sock, &flag, sizeof(int), 0) == SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Error Receiving Confirmation. ID: %s\n", strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+
+    return (int)ntohl(flag);
+}
+
 void cmd_add_user(const int sock, char input[BUFSIZE]) {
-    // TODO: Implement.
+    int flag;
+    if ((flag = send_cmd(sock, input)) == 0) {
+        write_log("Could Not Send The Command.\n");
+        return;
+    }
+
+    if (flag == 1) {
+        write_log("User Added Successfully.\n");
+    } else {
+        write_log("Could Not add User.\n");
+    }
 }
 
 void cmd_rm_user(const int sock, char input[BUFSIZE]) {
-    // TODO: Implement.
+    int flag;
+    if ((flag = send_cmd(sock, input)) == 0) {
+        write_log("Could Not Send The Command.\n");
+        return;
+    }
+
+    if (flag == 1) {
+        write_log("User Removed Successfully.\n");
+    } else {
+        write_log("Could Not Remove User.\n");
+    }
 }
 
 void cmd_chmod(const int sock, char input[BUFSIZE]) {
-    // TODO: Implement.
+    int flag;
+    if ((flag = send_cmd(sock, input)) == 0) {
+        write_log("Could Not Send The Command.\n");
+        return;
+    }
+
+    if (flag == 1) {
+        write_log("Changed User Privileges Successfully.\n");
+    } else {
+        write_log("Could Not Change User Privileges.\n");
+    }
 }
 
 int process_cmd(char input[BUFSIZE], const int sock) {
@@ -257,8 +313,10 @@ unsigned int auth(const int sock) {
 
 void client(char *ip, int port) {
     char log_msg[BUFSIZE];
+    int flag = 1;
     if (ip == NULL) {
         ip = IP;
+        flag = 0;
     }
     if (port == 0) {
         port = PORT;
@@ -283,6 +341,8 @@ void client(char *ip, int port) {
         session(&c_session);
     }
 
-    free(ip);
+    if (flag) {
+        free(ip);
+    }
     close(sock);
 }
