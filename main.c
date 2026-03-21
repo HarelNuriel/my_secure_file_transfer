@@ -1,10 +1,11 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "client.h"
 #include "server.h"
 
-char *handle_flags(int *port, char **argv, const int argc) {
+char *handle_flags(FILE **log_stream, int *port, char **argv, const int argc) {
     char *ip = NULL;
 
     for (int i = 2; i < argc; i++) {
@@ -26,6 +27,12 @@ char *handle_flags(int *port, char **argv, const int argc) {
             } else {
                 printf("Error: -t flag requires an IP address.\n");
             }
+        } else if (strcmp(argv[i], "-l") == 0) {
+            if (i + 1 < argc) {
+                *log_stream = fopen(argv[i + 1], "w");
+                set_log_stream(*log_stream);
+            }
+            i++;
         }
     }
 
@@ -34,9 +41,11 @@ char *handle_flags(int *port, char **argv, const int argc) {
 
 int main(const int argc, char **argv) {
     char *help = "Secure File Transfer:\nUsage: sft [mode] [flags]."
-                 "\n\nModes:\n\tserver\tSetup a sft server.\n\tclient\tSetup a sft client."
-                 "\n\nFlags:\n\t-help [-h]\tPrint Help Message.\n\t-p\tPort Number to listen/connect to (default 1234)."
-                 "\n\t-t\tIP address to connect to (default 127.0.0.1).\n";
+                 "\n\nModes:\n\tserver\t\tSetup a sft server.\n\tclient\t\tSetup a sft client."
+                 "\n\nFlags:\n\t-help [-h]\t\tPrint Help Message."
+                 "\n\t-p [port number]\tPort Number to listen/connect to (default 1234)."
+                 "\n\t-t [target address]\tIP address to connect to (default 127.0.0.1)."
+                 "\n\t-l [Log File]\t\tLog File to write logs into.";
 
     // Handle empty execution
     if (argc < 2) {
@@ -51,7 +60,8 @@ int main(const int argc, char **argv) {
     }
 
     int port = 0;
-    char *ip = handle_flags(&port, argv, argc);
+    FILE *log_stream = NULL;
+    char *ip = handle_flags(&log_stream, &port, argv, argc);
 
     if (strcmp(argv[1], "server") == 0) {
         server(ip, port);
@@ -59,6 +69,10 @@ int main(const int argc, char **argv) {
         client(ip, port);
     } else {
         printf("Error: Invalid mode.\n\n%s", help);
+    }
+
+    if (log_stream != NULL) {
+        fclose(log_stream);
     }
 
     return 0;

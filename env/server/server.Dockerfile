@@ -8,8 +8,8 @@ RUN mkdir /server/test_files
 RUN mkdir /var/log/server
 WORKDIR /server
 
-COPY test/ /server/test_files/
-COPY my_secure_file_transfer /server/
+COPY .. /server/test_files/
+COPY ./build/my_secure_file_transfer /server/
 
 RUN chmod +x /server/my_secure_file_transfer
 CMD ["/server/my_secure_file_transfer", "server", "-t", "10.5.0.10"]

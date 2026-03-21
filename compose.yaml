@@ -4,15 +4,29 @@ services:
   server:
     image: msft
     build:
-      context: test
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./env/server/server.Dockerfile
     ports:
       - "4444:4444"
     networks:
       static_network:
         ipv4_address: 10.5.0.10
     volumes:
-      - ./log/:/var/log/server
+      - ./env/server/log:/var/log/server
+      - ./env/server:/opt/server
+
+  client:
+    image: msft
+    build:
+      context: .
+      dockerfile: ./env/client/client.Dockerfile
+    networks:
+      static_network:
+        ipv4_address: 10.5.0.11
+    volumes:
+      - ./env/client/log:/var/log/client
+      - ./env/client:/opt/client
+
 
 networks:
   static_network:

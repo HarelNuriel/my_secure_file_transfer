@@ -3,8 +3,8 @@
 //
 
 #include "client.h"
-
-#include "auth.h"
+#include "common_utils.h"
+#include <stdio.h>
 
 int open_client_socket(const char *ip, const int port) {
     char log_msg[BUFSIZE];
@@ -21,8 +21,10 @@ int open_client_socket(const char *ip, const int port) {
     sock_addr.sin_addr.s_addr = inet_addr(ip);
 
     snprintf(log_msg, BUFSIZE, "Connecting to: %s:%d\n", ip, port);
-    if (connect(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Connecting. ID: %s\n", strerror(errno));
+    if (connect(sock, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) ==
+        SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Error Connecting. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         return INVALID_SOCKET;
     }
@@ -40,17 +42,19 @@ void help() {
                  "\t\t\t\tAdd User.\n\n"
                  "rm_user [name]\tRemove User.\n"
                  "\nchmod [name] [privilege]\n"
-                 "\t\t\t\tChange User [name]'s Privileges (1 read, 2 write, 4 modify users, 7 admin).\n\n";
-    printf("%s", help);
+                 "\t\t\t\tChange User [name]'s Privileges (1 read, 2 write, 4 "
+                 "modify users, 7 admin).\n\n";
+
+    write_log(help);
 }
 
 void handle_error(const int err) {
     if (err == 0) {
-        printf("Server Disconnected.\n");
+        write_log("Server Disconnected.\n");
     } else if (err == UNKNOWN_CMD) {
-        printf("Unknown Command.\n");
+        write_log("Unknown Command.\n");
     } else if (err == INSUFFICIENT_PRIVILEGES) {
-        printf("Insufficient Privileges.\n");
+        write_log("Insufficient Privileges.\n");
     }
 }
 
@@ -64,7 +68,8 @@ void get(const int sock, const char input[BUFSIZE]) {
     }
 
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         free(file_name);
         return;
@@ -75,7 +80,7 @@ void get(const int sock, const char input[BUFSIZE]) {
         return;
     }
 
-    snprintf(log_msg, BUFSIZE, "Writing To: %s\n", file_name);
+    snprintf(log_msg, BUFSIZE, "Writing To: %s.\n", file_name);
     write_log(log_msg);
     recv_file(sock, file_name);
 
@@ -84,7 +89,7 @@ void get(const int sock, const char input[BUFSIZE]) {
     free(file_name);
 }
 
-// TODO: Redactor with send_cmd and get_args
+// TODO: Refactor with send_cmd and get_args
 void set(const int sock, const char input[BUFSIZE]) {
     char log_msg[BUFSIZE], *file_name = get_arg(input);
     int flag;
@@ -94,7 +99,8 @@ void set(const int sock, const char input[BUFSIZE]) {
     }
 
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending get. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         free(file_name);
         return;
@@ -105,7 +111,7 @@ void set(const int sock, const char input[BUFSIZE]) {
         return;
     }
 
-    snprintf(log_msg, BUFSIZE, "Reading %s\n", file_name);
+    snprintf(log_msg, BUFSIZE, "Reading %s.\n", file_name);
     write_log(log_msg);
     send_file(sock, file_name);
 
@@ -119,7 +125,8 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     int flag;
     ssize_t size;
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Sending The Command. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Sending The Command. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         return;
     }
@@ -130,7 +137,9 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     }
 
     if ((size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Receiving The Number Of Files. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE,
+                 "Error Receiving The Number Of Files. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         return;
     }
@@ -144,7 +153,9 @@ void list_dir(const int sock, char input[BUFSIZE]) {
     const long file_num = strtol(buffer, NULL, 10);
     for (int i = 0; i < file_num; i++) {
         if ((size = recv_packet(sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
-            snprintf(log_msg, BUFSIZE, "Error Receiving The File's Name. ID: %s\n", strerror(errno));
+            snprintf(log_msg, BUFSIZE,
+                     "Error Receiving The File's Name. ID: %s\n",
+                     strerror(errno));
             write_log(log_msg);
             return;
         }
@@ -166,7 +177,8 @@ int send_cmd(const int sock, char input[BUFSIZE]) {
     int flag;
 
     if (send_packet(sock, input, (int)strlen(input)) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error sending add. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error sending add. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         return 0;
     }
@@ -177,7 +189,8 @@ int send_cmd(const int sock, char input[BUFSIZE]) {
     }
 
     if (recv(sock, &flag, sizeof(int), 0) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Receiving Confirmation. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Receiving Confirmation. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         return 0;
     }
@@ -250,16 +263,20 @@ int process_cmd(char input[BUFSIZE], const int sock) {
         cmd_chmod(sock, input);
     } else if (strcmp(cmd, "exit") == 0) {
         free(cmd);
-        if (send_packet(sock, "exit\0", (int)strlen("exit\0")) == SOCKET_ERROR) {
-            snprintf(log_msg, BUFSIZE, "Error sending the data. ID: %s\n", strerror(errno));
+        if (send_packet(sock, "exit\0", (int)strlen("exit\0")) ==
+            SOCKET_ERROR) {
+            snprintf(log_msg, BUFSIZE, "Error sending the data. ID: %s\n",
+                     strerror(errno));
             write_log(log_msg);
             return 1;
         }
         return 0;
     } else if (strcmp(cmd, "shutdown") == 0) {
         free(cmd);
-        if (send_packet(sock, "shutdown\0", (int)strlen("shutdown\0")) == SOCKET_ERROR) {
-            snprintf(log_msg, BUFSIZE, "Error sending the data. ID: %s\n", strerror(errno));
+        if (send_packet(sock, "shutdown\0", (int)strlen("shutdown\0")) ==
+            SOCKET_ERROR) {
+            snprintf(log_msg, BUFSIZE, "Error sending the data. ID: %s\n",
+                     strerror(errno));
             write_log(log_msg);
             return 1;
         }
@@ -284,27 +301,32 @@ void session(struct user *c_session) {
 }
 
 unsigned int auth(const int sock) {
-    char name[BUFSIZE], passwd[BUFSIZE];
+    char name[BUFSIZE], passwd[BUFSIZE], log_msg[BUFSIZE];
     int is_valid = 0;
 
-    printf("Please Enter Username and Password:\n");
-    printf("Username: ");
+    write_log("Please Enter Username and Password:\n");
+    write_log("Username: ");
     fgets(name, BUFSIZE, stdin);
     name[strcspn(name, "\n")] = '\0';
 
-    printf("Password: ");
+    write_log("Password: ");
     fgets(passwd, BUFSIZE, stdin);
     passwd[strcspn(passwd, "\n")] = '\0';
 
     char *hash = prepare_creds(name, passwd);
 
     if (send_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
-        printf("Error Sending The Username. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Sending The Username. ID: %s\n",
+                 strerror(errno));
+        write_log(log_msg);
+        free(hash);
         return 0;
     }
 
     while (recv(sock, &is_valid, sizeof(int), 0) == SOCKET_ERROR) {
-        printf("Error Receiving Answer. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Receiving Answer. ID: %s\n",
+                 strerror(errno));
+        write_log(log_msg);
     }
 
     free(hash);
@@ -323,6 +345,8 @@ void client(char *ip, int port) {
     }
 
     const int sock = open_client_socket(ip, port);
+    if (sock == INVALID_SOCKET)
+        return;
 
     snprintf(log_msg, BUFSIZE, "Session started with host: %s\n", ip);
     write_log(log_msg);
@@ -330,12 +354,12 @@ void client(char *ip, int port) {
     unsigned int i = 0, is_valid;
     while ((is_valid = auth(sock)) != VALID_CREDS && i < 3) {
         if (is_valid == INVALID_CREDS) {
-            printf("Invalid Credentials.\n");
+            write_log("Invalid Credentials.\n");
             i++;
         }
     }
     if (is_valid == VALID_CREDS) {
-        printf("Successfully Logged In.\n");
+        write_log("Successfully Logged In.\n");
         struct user c_session;
         c_session.sock = sock;
         session(&c_session);

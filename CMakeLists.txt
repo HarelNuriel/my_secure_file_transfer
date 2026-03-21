@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 4.1)
 project(my_secure_file_transfer C)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 
 set(SOURCE_FILES main.c
@@ -13,7 +14,9 @@ set(SOURCE_FILES main.c
         src/auth.c
         include/auth.h
         src/sha256.c
-        include/sha256.h)
+        include/sha256.h
+        src/RSA.c
+        include/RSA.h)
 
 add_executable(my_secure_file_transfer ${SOURCE_FILES})
 
