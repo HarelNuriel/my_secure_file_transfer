@@ -2,16 +2,14 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
 )
-
-type dualChannel struct {
-	errChan chan error
-	strChan chan string
-}
 
 func readOutput(reader *bufio.Reader, delim byte, channel dualChannel) {
 	clientLog, err := reader.ReadString(delim)
@@ -46,8 +44,8 @@ func sendInput(t *testing.T, stdin io.WriteCloser, message string) {
 	}
 }
 
-func execTest(t *testing.T, stdin io.WriteCloser, stdout io.ReadCloser) {
-	cmd := [...]string{"admin\n", "admin\n", "get pic.jpeg\n", "exit\n"}
+func execGetTest(t *testing.T, stdin io.WriteCloser, stdout io.ReadCloser) {
+	cmd := [...]string{"admin\n", "admin\n", "get pic.jpg\n", "exit\n"}
 	reader := bufio.NewReader(stdout)
 
 	outputRoutine(t, reader, '\n', "Session started with host: 10.5.0.10\n")
@@ -59,11 +57,27 @@ func execTest(t *testing.T, stdin io.WriteCloser, stdout io.ReadCloser) {
 	outputRoutine(t, reader, '\n', "Successfully Logged In.\n")
 	outputRoutine(t, reader, ' ', "> ")
 	sendInput(t, stdin, cmd[2])
-	outputRoutine(t, reader, '\n', "Writing To: pic.jpeg.\n")
+	outputRoutine(t, reader, '\n', "Writing To: pic.jpg.\n")
 	outputRoutine(t, reader, '\n', "File Received Successfully.\n")
-	outputRoutine(t, reader, '\n', "Successfully Received pic.jpeg.\n")
+	outputRoutine(t, reader, '\n', "Successfully Received pic.jpg.\n")
 	outputRoutine(t, reader, ' ', "> ")
 	sendInput(t, stdin, cmd[3])
+}
+
+func hashFile(t *testing.T, filename string) string {
+	file, err := os.Open(filename)
+	if err != nil {
+		t.Fatalf("Couldn't open %s. %s", filename, err)
+		return ""
+	}
+
+	hasher := sha256.New()
+	_, err = io.Copy(hasher, file)
+	if err != nil {
+		t.Errorf("Error Copying file contest. %s", err)
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum(nil))
 }
 
 func TestGetFile(t *testing.T) {
@@ -84,7 +98,7 @@ func TestGetFile(t *testing.T) {
 		t.Fatalf("Failed To Run The App. %s", err)
 	}
 
-	execTest(t, stdin, stdout)
+	execGetTest(t, stdin, stdout)
 
 	err = stdin.Close()
 	if err != nil {
@@ -99,5 +113,11 @@ func TestGetFile(t *testing.T) {
 	err = cmd.Wait()
 	if err != nil {
 		t.Errorf("Exit Unsuccessful. %s", err)
+	}
+
+	ogFile := hashFile(t, "/opt/client/pic.jpg")
+	getFile := hashFile(t, "/client/test_files/pic.jpg")
+	if ogFile != getFile {
+		t.Fatal("Hash Mismatch.")
 	}
 }

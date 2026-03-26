@@ -3,6 +3,8 @@
 //
 
 #include "auth.h"
+#include "common_utils.h"
+#include <string.h>
 
 static char *auth_path;
 static char *passwd_path;
@@ -12,17 +14,18 @@ int set_auth_path(const char *path) {
     return auth_path == NULL ? 0 : 1;
 }
 
-char* prepare_creds(const char *name, const char *passwd) {
-    char *buffer = malloc(sizeof(char) * (CRED_SIZE + 1));
+char *prepare_creds(const char *name, const char *passwd) {
+    char *buffer = malloc(sizeof(char) * (CRED_SIZE + 2));
     if (buffer == NULL) {
         char log[BUFSIZE];
-        snprintf(log, BUFSIZE, "Couldn't Allocate Memory. ID: %s\n", strerror(errno));
+        snprintf(log, BUFSIZE, "Couldn't Allocate Memory. ID: %s\n",
+                 strerror(errno));
         write_log(log);
         return 0;
     }
 
     char *name_hash = sha256(name), *passwd_hash = sha256(passwd);
-    snprintf(buffer, CRED_SIZE + 1, "%s:%s", name_hash, passwd_hash);
+    snprintf(buffer, CRED_SIZE + 2, "%s:%s", name_hash, passwd_hash);
 
     free(name_hash);
     free(passwd_hash);
@@ -30,8 +33,11 @@ char* prepare_creds(const char *name, const char *passwd) {
 }
 
 int extract_privilege(char *buffer) {
-    char *priv_str = buffer + CRED_SIZE + 1;
-    return (int)strtol(priv_str, NULL, 10);
+    char *last_col = strrchr(buffer, ':');
+    if (last_col == NULL) {
+        return INVALID_CREDS;
+    }
+    return (int)strtol(last_col + 1, NULL, 10);
 }
 
 int validate_auth_user(const char *hash) {
@@ -43,15 +49,15 @@ int validate_auth_user(const char *hash) {
     FILE *fp = fopen(passwd_path, "r");
     if (fp == NULL) {
         char buffer[BUFSIZE];
-        snprintf(buffer, BUFSIZE, "Error Opening %s, ID: %s\n", passwd_path, strerror(errno));
+        snprintf(buffer, BUFSIZE, "Error Opening %s, ID: %s\n", passwd_path,
+                 strerror(errno));
         write_log(buffer);
         return 0;
     }
 
     char buffer[BUFSIZE] = {0};
-    while (fgets(buffer, BUFSIZE, fp)) {
-        if (strncmp(hash, buffer, CRED_SIZE) == 0 && strlen(buffer) > CRED_SIZE + 1) {
-            buffer[strcspn(buffer, "\n")] = '\0';
+    while (fgets(buffer, BUFSIZE, fp) != NULL) {
+        if (strncmp(hash, buffer, CRED_SIZE) == 0) {
             fclose(fp);
             return extract_privilege(buffer);
         }
@@ -67,16 +73,21 @@ int add_user(const char *hash, const int privileges) {
         return 0;
     }
 
+    if (validate_auth_user(hash) != INVALID_CREDS) {
+        write_log("User Already Exists.\n");
+        return 0;
+    }
+
     FILE *fp = fopen(passwd_path, "a");
     if (fp == NULL) {
         char buffer[BUFSIZE];
-        snprintf(buffer, BUFSIZE, "Couldn't Open %s. ID: %s\n", passwd_path, strerror(errno));
+        snprintf(buffer, BUFSIZE, "Couldn't Open %s. ID: %s\n", passwd_path,
+                 strerror(errno));
         write_log(buffer);
         return 0;
     }
 
-    fprintf(fp, "%s:%d", hash, privileges);
-    fprintf(fp, "\n");
+    fprintf(fp, "%s:%d\n", hash, privileges);
 
     fclose(fp);
     return 1;
@@ -86,28 +97,33 @@ int auth_ready() {
     if (auth_path == NULL) {
         if (!set_auth_path("auth")) {
             char buffer[BUFSIZE];
-            snprintf(buffer, BUFSIZE, "Couldn't Set Auth Path. ID: %s\n", strerror(errno));
+            snprintf(buffer, BUFSIZE, "Couldn't Set Auth Path. ID: %s\n",
+                     strerror(errno));
             write_log(buffer);
             return 0;
         }
     }
 
-    passwd_path = malloc(sizeof(char) * (strlen(auth_path) + strlen(PASSWD_FILE)) + 2);
+    passwd_path =
+        malloc(sizeof(char) * (strlen(auth_path) + strlen(PASSWD_FILE)) + 2);
     if (passwd_path == NULL) {
         char buffer[BUFSIZE];
-        snprintf(buffer, BUFSIZE, "Couldn't Set Auth Path. ID: %s\n", strerror(errno));
+        snprintf(buffer, BUFSIZE, "Couldn't Set Auth Path. ID: %s\n",
+                 strerror(errno));
         write_log(buffer);
         free(auth_path);
         return 0;
     }
-    snprintf(passwd_path, strlen(auth_path) + strlen(PASSWD_FILE) + 2, "%s%s", auth_path, PASSWD_FILE);
+    snprintf(passwd_path, strlen(auth_path) + strlen(PASSWD_FILE) + 2, "%s%s",
+             auth_path, PASSWD_FILE);
 
     if (access(passwd_path, F_OK) != 0) {
         DIR *d = opendir(auth_path);
         if (d == NULL) {
             if (mkdir(auth_path, 0744) != 0) {
                 char buffer[BUFSIZE];
-                snprintf(buffer, BUFSIZE, "Error creating %s, ID: %s", auth_path, strerror(errno));
+                snprintf(buffer, BUFSIZE, "Error creating %s, ID: %s",
+                         auth_path, strerror(errno));
                 write_log(buffer);
                 free_auth();
                 return 0;
@@ -117,7 +133,8 @@ int auth_ready() {
         FILE *fp = fopen(passwd_path, "w");
         if (fp == NULL) {
             char buffer[BUFSIZE];
-            snprintf(buffer, BUFSIZE, "Error creating %s, ID: %s", passwd_path, strerror(errno));
+            snprintf(buffer, BUFSIZE, "Error creating %s, ID: %s", passwd_path,
+                     strerror(errno));
             write_log(buffer);
             closedir(d);
             free_auth();
@@ -130,7 +147,9 @@ int auth_ready() {
 
         if (!add_user(hash, PRIV_ADMIN)) {
             char buffer[BUFSIZE];
-            snprintf(buffer, BUFSIZE, "Could Not Create File With Default Credentials. ID: %s\n", strerror(errno));
+            snprintf(buffer, BUFSIZE,
+                     "Could Not Create File With Default Credentials. ID: %s\n",
+                     strerror(errno));
             write_log(buffer);
             free(hash);
             free_auth();
@@ -153,21 +172,23 @@ int rm_user(const char *name_hash, const int id) {
         return 0;
     }
 
-    const size_t len = strlen(auth_path) + 6;
+    const size_t len = strlen(auth_path) + 10;
     char buffer[BUFSIZE], *temp_path = malloc(sizeof(char) * len);
     snprintf(temp_path, len, "%stemp_id", auth_path);
 
     FILE *p_file = fopen(passwd_path, "r");
     FILE *temp = fopen(temp_path, "w");
     if (p_file == NULL || temp == NULL) {
-        snprintf(buffer, BUFSIZE, "Couldn't Open %s or %s. ID: %s\n", passwd_path, temp_path, strerror(errno));
+        snprintf(buffer, BUFSIZE, "Couldn't Open %s or %s. ID: %s\n",
+                 passwd_path, temp_path, strerror(errno));
         write_log(buffer);
         free(temp_path);
-        if (p_file != NULL) fclose(p_file);
+        if (p_file != NULL)
+            fclose(p_file);
         return 0;
     }
 
-    while (fgets(buffer, BUFSIZE, p_file) > 0) {
+    while (fgets(buffer, BUFSIZE, p_file) != NULL) {
         if (strncmp(name_hash, buffer, SHA256_SIZE) == 0) {
             continue;
         }
@@ -183,34 +204,41 @@ int rm_user(const char *name_hash, const int id) {
     return 1;
 }
 
-int change_privileges(const char *name_hash, const int privileges, const int id) {
+int change_privileges(const char *name_hash, const int privileges,
+                      const int id) {
     if (name_hash == NULL) {
         write_log("Invalid hash.");
         return 0;
     }
 
-    const size_t len = strlen(auth_path) + 6;
+    const size_t len = strlen(auth_path) + 10;
     char buffer[BUFSIZE], *temp_path = malloc(sizeof(char) * len);
     snprintf(temp_path, len, "%stemp_%d", auth_path, id);
 
     FILE *p_file = fopen(passwd_path, "r");
     FILE *temp = fopen(temp_path, "w");
     if (p_file == NULL || temp == NULL) {
-        snprintf(buffer, BUFSIZE, "Couldn't Open %s or %s. ID: %s\n", passwd_path, temp_path, strerror(errno));
+        snprintf(buffer, BUFSIZE, "Couldn't Open %s or %s. ID: %s\n",
+                 passwd_path, temp_path, strerror(errno));
         write_log(buffer);
         free(temp_path);
-        if (p_file != NULL) fclose(p_file);
+        if (p_file != NULL)
+            fclose(p_file);
         return 0;
     }
 
-    char creds[BUFSIZE];
-    while (fgets(buffer, BUFSIZE, p_file) > 0) {
+    while (fgets(buffer, BUFSIZE, p_file) != NULL) {
         if (strncmp(name_hash, buffer, SHA256_SIZE) == 0) {
-            snprintf(creds, CRED_SIZE, "%s", buffer);
-            snprintf(buffer, BUFSIZE, "%s:%d\n", creds, privileges);
-            write_log(buffer);
+            char *last_col = strrchr(buffer, ':');
+            if (last_col != NULL) {
+                *last_col = '\0';
+                fprintf(temp, "%s:%d\n", buffer, privileges);
+            } else {
+                fprintf(temp, "%s", buffer);
+            }
+        } else {
+            fprintf(temp, "%s", buffer);
         }
-        fprintf(temp, "%s", buffer);
     }
 
     fclose(temp);

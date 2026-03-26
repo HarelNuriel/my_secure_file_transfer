@@ -20,4 +20,14 @@ set(SOURCE_FILES main.c
 
 add_executable(my_secure_file_transfer ${SOURCE_FILES})
 
+target_compile_options(my_secure_file_transfer PUBLIC -g)
+
 target_include_directories(my_secure_file_transfer PUBLIC include)
+
+add_custom_target(runTest COMMAND docker compose build
+                COMMAND docker compose up --exit-code-from client
+                --abort-on-container-exit
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_custom_target(cleanup COMMAND docker compose down -v
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

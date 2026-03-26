@@ -169,6 +169,7 @@ int validate_privilege(const struct user *session, const int privilege) {
     unsigned int flag;
     if ((session->privilege & privilege) != privilege) {
         flag = htonl(INSUFFICIENT_PRIVILEGES);
+        write_log("Sending INSUFFICIENT_PRIVILEGES.\n");
         send(session->sock, &flag, sizeof(int), 0);
         return 0;
     }
@@ -271,7 +272,7 @@ void proc_chmod(const int sock, char input[BUFSIZE]) {
     write_log(log_msg);
     send(sock, &flag, sizeof(int), 0);
     free(name_hash);
-    free(argv);
+    free_double_pointer(argv, argc);
 }
 
 int read_socket(const struct user *session) {

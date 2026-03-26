@@ -55,7 +55,8 @@ dkms.conf
 *.dwo
 
 # other
-cmake-build-debug/
-env/test_files/
+CMakeFiles/
 build/
-log/
+out/
+docker_env/
+idea/

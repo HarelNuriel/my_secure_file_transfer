@@ -180,19 +180,19 @@ int send_cmd(const int sock, char input[BUFSIZE]) {
         snprintf(log_msg, BUFSIZE, "Error sending add. ID: %s\n",
                  strerror(errno));
         write_log(log_msg);
-        return 0;
+        return -2;
     }
     recv(sock, &flag, sizeof(int), 0);
     if ((flag = (int)ntohl(flag)) != PRIVILEGES_OK) {
         handle_error(flag);
-        return 0;
+        return INSUFFICIENT_PRIVILEGES;
     }
 
     if (recv(sock, &flag, sizeof(int), 0) == SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Receiving Confirmation. ID: %s\n",
                  strerror(errno));
         write_log(log_msg);
-        return 0;
+        return -2;
     }
 
     return (int)ntohl(flag);
@@ -200,7 +200,7 @@ int send_cmd(const int sock, char input[BUFSIZE]) {
 
 void cmd_add_user(const int sock, char input[BUFSIZE]) {
     int flag;
-    if ((flag = send_cmd(sock, input)) == 0) {
+    if ((flag = send_cmd(sock, input)) == -2) {
         write_log("Could Not Send The Command.\n");
         return;
     }
@@ -208,13 +208,13 @@ void cmd_add_user(const int sock, char input[BUFSIZE]) {
     if (flag == 1) {
         write_log("User Added Successfully.\n");
     } else {
-        write_log("Could Not add User.\n");
+        write_log("Could Not Add User.\n");
     }
 }
 
 void cmd_rm_user(const int sock, char input[BUFSIZE]) {
     int flag;
-    if ((flag = send_cmd(sock, input)) == 0) {
+    if ((flag = send_cmd(sock, input)) == -2) {
         write_log("Could Not Send The Command.\n");
         return;
     }
@@ -228,7 +228,7 @@ void cmd_rm_user(const int sock, char input[BUFSIZE]) {
 
 void cmd_chmod(const int sock, char input[BUFSIZE]) {
     int flag;
-    if ((flag = send_cmd(sock, input)) == 0) {
+    if ((flag = send_cmd(sock, input)) == -2) {
         write_log("Could Not Send The Command.\n");
         return;
     }
@@ -290,13 +290,14 @@ int process_cmd(char input[BUFSIZE], const int sock) {
 }
 
 void session(struct user *c_session) {
-    int flag = 1;
     char buffer[BUFSIZE];
 
-    while (flag) {
+    write_log("> ");
+    while (fgets(buffer, BUFSIZE, stdin) != NULL) {
+        if (!process_cmd(buffer, c_session->sock)) {
+            break;
+        }
         write_log("> ");
-        fgets(buffer, BUFSIZE, stdin);
-        flag = process_cmd(buffer, c_session->sock);
     }
 }
 
@@ -306,11 +307,15 @@ unsigned int auth(const int sock) {
 
     write_log("Please Enter Username and Password:\n");
     write_log("Username: ");
-    fgets(name, BUFSIZE, stdin);
+    if (fgets(name, BUFSIZE, stdin) == NULL) {
+        return 0;
+    }
     name[strcspn(name, "\n")] = '\0';
 
     write_log("Password: ");
-    fgets(passwd, BUFSIZE, stdin);
+    if (fgets(passwd, BUFSIZE, stdin) == NULL) {
+        return 0;
+    }
     passwd[strcspn(passwd, "\n")] = '\0';
 
     char *hash = prepare_creds(name, passwd);
