@@ -10,10 +10,9 @@ ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
 
 RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 1777 "$GOPATH"
 
-RUN mkdir /client && mkdir /client/test_files && mkdir /var/log/client
+RUN mkdir /client && mkdir /client/test_files && mkdir /var/log/client && mkdir /opt/shared
 WORKDIR /client
 
-COPY ./env/test_files /client/test_files/
 COPY ./build/my_secure_file_transfer /client/msft
 
 RUN chmod +x /client/msft

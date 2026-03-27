@@ -31,3 +31,6 @@ add_custom_target(runTest COMMAND docker compose build
 
 add_custom_target(cleanup COMMAND docker compose down -v
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_dependencies(runTest cleanup)
+add_dependencies(runTest  my_secure_file_transfer)

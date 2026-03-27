@@ -81,6 +81,7 @@ func hashFile(t *testing.T, filename string) string {
 }
 
 func TestGetFile(t *testing.T) {
+	os.Remove("/opt/client/pic.jpg")
 	cmd := exec.Command("/client/msft", "client", "-t", "10.5.0.10")
 
 	stdin, err := cmd.StdinPipe()
@@ -115,8 +116,8 @@ func TestGetFile(t *testing.T) {
 		t.Errorf("Exit Unsuccessful. %s", err)
 	}
 
-	ogFile := hashFile(t, "/opt/client/pic.jpg")
-	getFile := hashFile(t, "/client/test_files/pic.jpg")
+	ogFile := hashFile(t, "/opt/shared/pic.jpg")
+	getFile := hashFile(t, "/opt/client/pic.jpg")
 	if ogFile != getFile {
 		t.Fatal("Hash Mismatch.")
 	}

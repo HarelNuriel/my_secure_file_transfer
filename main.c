@@ -1,9 +1,11 @@
-#include <math.h>
+#include "client.h"
+#include "server.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "client.h"
-#include "server.h"
+
+static char *data_path;
 
 char *handle_flags(FILE **log_stream, int *port, char **argv, const int argc) {
     char *ip = NULL;
@@ -16,8 +18,7 @@ char *handle_flags(FILE **log_stream, int *port, char **argv, const int argc) {
             } else {
                 printf("Error: -p flag requires a port number.\n");
             }
-        }
-        else if (strcmp(argv[i], "-t") == 0) {
+        } else if (strcmp(argv[i], "-t") == 0) {
             if (i + 1 < argc) {
                 ip = malloc(sizeof(char) * (strlen(argv[i + 1]) + 1));
                 if (ip != NULL) {
@@ -33,6 +34,13 @@ char *handle_flags(FILE **log_stream, int *port, char **argv, const int argc) {
                 set_log_stream(*log_stream);
             }
             i++;
+        } else if (strncmp(argv[i], "-s", 2) == 0) {
+            if (i + 1 < argc) {
+                size_t len = strlen(argv[i + 1]) + 1;
+                data_path = malloc(sizeof(*data_path) * len);
+                snprintf(data_path, len, "%s", argv[i + 1]);
+            }
+            i++;
         }
     }
 
@@ -40,12 +48,15 @@ char *handle_flags(FILE **log_stream, int *port, char **argv, const int argc) {
 }
 
 int main(const int argc, char **argv) {
-    char *help = "Secure File Transfer:\nUsage: sft [mode] [flags]."
-                 "\n\nModes:\n\tserver\t\tSetup a sft server.\n\tclient\t\tSetup a sft client."
-                 "\n\nFlags:\n\t-help [-h]\t\tPrint Help Message."
-                 "\n\t-p [port number]\tPort Number to listen/connect to (default 1234)."
-                 "\n\t-t [target address]\tIP address to connect to (default 127.0.0.1)."
-                 "\n\t-l [Log File]\t\tLog File to write logs into.";
+    char *help =
+        "Secure File Transfer:\nUsage: sft [mode] [flags]."
+        "\n\nModes:\n\tserver\t\tSetup a sft server.\n\tclient\t\tSetup a sft "
+        "client."
+        "\n\nFlags:\n\t-help [-h]\t\tPrint help message."
+        "\n\t-p [port number]\tPort number to listen/connect to (default 1234)."
+        "\n\t-t [target address]\tIP address to connect to (default 127.0.0.1)."
+        "\n\t-l [Log File]\t\tLog file to write logs into."
+        "\n\t-s [save path]\t\tDefines where the server saves its files.";
 
     // Handle empty execution
     if (argc < 2) {
@@ -64,7 +75,7 @@ int main(const int argc, char **argv) {
     char *ip = handle_flags(&log_stream, &port, argv, argc);
 
     if (strcmp(argv[1], "server") == 0) {
-        server(ip, port);
+        server(ip, port, data_path);
     } else if (strcmp(argv[1], "client") == 0) {
         client(ip, port);
     } else {

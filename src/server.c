@@ -1,6 +1,11 @@
 #include "server.h"
+#include "common_utils.h"
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "auth.h"
+static char *save_path;
 
 int open_server_socket(const int port, const char *ip) {
     const int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -17,7 +22,8 @@ int open_server_socket(const int port, const char *ip) {
     sock_addr.sin_port = htons(port);
     sock_addr.sin_addr.s_addr = inet_addr(ip);
 
-    if (bind(sock, (struct sockaddr*) &sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
+    if (bind(sock, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) ==
+        SOCKET_ERROR) {
         snprintf(log_msg, BUFSIZE, "Error Binding. ID: %s\n", strerror(errno));
         write_log(log_msg);
         return INVALID_SOCKET;
@@ -34,6 +40,21 @@ int open_server_socket(const int port, const char *ip) {
     return sock;
 }
 
+char *get_data_path(const char *rel_path) {
+    char log_msg[BUFSIZE];
+    size_t len = strlen(save_path) + strlen(rel_path) + 1;
+    char *full_path = malloc(sizeof(*full_path) * len);
+    if (full_path == NULL) {
+        snprintf(log_msg, BUFSIZE, "Error Allocating Memmory. %s",
+                 strerror(errno));
+        write_log(log_msg);
+        return NULL;
+    }
+
+    snprintf(full_path, len, "%s%s", save_path, rel_path);
+    return full_path;
+}
+
 void recv_file_from_client(const int sock, char input[BUFSIZE]) {
     char *file_name = get_arg(input);
     char log_msg[BUFSIZE];
@@ -43,30 +64,43 @@ void recv_file_from_client(const int sock, char input[BUFSIZE]) {
         return;
     }
 
-    snprintf(log_msg, BUFSIZE, "Writing To: %s.\n", file_name);
-    write_log(log_msg);
-    recv_file(sock, file_name);
-
+    char *full_path = get_data_path(file_name);
     free(file_name);
+    if (full_path == NULL) {
+        return;
+    }
+
+    snprintf(log_msg, BUFSIZE, "Writing To: %s.\n", full_path);
+    write_log(log_msg);
+    recv_file(sock, full_path);
+
+    free(full_path);
 }
 
 void send_file_to_client(const int sock, char input[BUFSIZE]) {
-    char *file_name = get_arg(input), log_msg[BUFSIZE];;
+    char *file_name = get_arg(input), log_msg[BUFSIZE];
     if (file_name == NULL) {
         snprintf(log_msg, BUFSIZE, "Failed To Get The Argument.\n");
         write_log(log_msg);
         return;
     }
 
-    snprintf(log_msg, BUFSIZE, "Reading %s.\n", file_name);
-    write_log(log_msg);
-    send_file(sock, file_name);
-
+    char *full_path = get_data_path(file_name);
     free(file_name);
+    if (full_path == NULL) {
+        return;
+    }
+
+    snprintf(log_msg, BUFSIZE, "Reading %s.\n", full_path);
+    write_log(log_msg);
+    send_file(sock, full_path);
+
+    free(full_path);
 }
 
-char** get_dir_file_list(const char* dir, int *length) {
-    char *path = get_path(dir), **files = malloc(sizeof(char*) * MIN_FILES), log_msg[BUFSIZE];
+char **get_dir_file_list(const char *dir, int *length) {
+    char *path = get_data_path(dir),
+         **files = malloc(sizeof(char *) * MIN_FILES), log_msg[BUFSIZE];
     *length = 0;
     if (files == NULL) {
         if (path != NULL) {
@@ -83,10 +117,11 @@ char** get_dir_file_list(const char* dir, int *length) {
         return NULL;
     }
 
-    DIR* d = opendir(path);
+    DIR *d = opendir(path);
     struct dirent *entry;
     if (d == NULL) {
-        snprintf(log_msg, BUFSIZE, "Error Opening Path. ID: %sn", strerror(errno));
+        snprintf(log_msg, BUFSIZE, "Error Opening Path. ID: %sn",
+                 strerror(errno));
         write_log(log_msg);
         free(path);
         free(files);
@@ -96,11 +131,18 @@ char** get_dir_file_list(const char* dir, int *length) {
     int i = 1;
     char **temp;
     while ((entry = readdir(d)) != NULL) {
+        if (strncmp(entry->d_name, ".", 1) == 0 ||
+            strncmp(entry->d_name, "..", 2) == 0 ||
+            strncmp(entry->d_name, "auth", 4) == 0) {
+            continue;
+        }
         if (*length >= MIN_FILES * i) {
             i++;
-            temp = realloc(files, sizeof(char*) * MIN_FILES * i);
+            temp = realloc(files, sizeof(char *) * MIN_FILES * i);
             if (temp == NULL) {
-                snprintf(log_msg, BUFSIZE, "Error Reallocating Memory. ID: %s\n", strerror(errno));
+                snprintf(log_msg, BUFSIZE,
+                         "Error Reallocating Memory. ID: %s\n",
+                         strerror(errno));
                 write_log(log_msg);
                 free(path);
                 free_double_pointer(files, *length);
@@ -119,7 +161,8 @@ char** get_dir_file_list(const char* dir, int *length) {
 
 void ls(const int sock, char input[BUFSIZE]) {
     int num_of_files, flag = -1, len;
-    char *dir = get_arg(input), buffer[BUFSIZE], log_msg[BUFSIZE];;
+    char *dir = get_arg(input), buffer[BUFSIZE], log_msg[BUFSIZE];
+    ;
     if (dir == NULL) {
         dir = ".";
         flag = 0;
@@ -136,7 +179,9 @@ void ls(const int sock, char input[BUFSIZE]) {
 
     len = snprintf(buffer, BUFSIZE, "%d", num_of_files);
     if (send_packet(sock, buffer, len) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Sending The Number Of Files. ID: %s\n", strerror(errno));
+        snprintf(log_msg, BUFSIZE,
+                 "Error Sending The Number Of Files. ID: %s\n",
+                 strerror(errno));
         write_log(log_msg);
         free_double_pointer(files, num_of_files);
         if (flag != 0) {
@@ -148,8 +193,11 @@ void ls(const int sock, char input[BUFSIZE]) {
     for (int i = 0; i < num_of_files; i++) {
         snprintf(log_msg, BUFSIZE, "Sending: %s\n", files[i]);
         write_log(log_msg);
-        if (send_packet(sock, files[i], (int)strlen(files[i])) == SOCKET_ERROR) {
-            snprintf(log_msg, BUFSIZE, "Error Sending The Files Names. ID: %s\n", strerror(errno));
+        if (send_packet(sock, files[i], (int)strlen(files[i])) ==
+            SOCKET_ERROR) {
+            snprintf(log_msg, BUFSIZE,
+                     "Error Sending The Files Names. ID: %s\n",
+                     strerror(errno));
             write_log(log_msg);
             free_double_pointer(files, num_of_files);
             if (flag != 0) {
@@ -185,7 +233,8 @@ void proc_add_user(const int sock, char input[BUFSIZE]) {
     if (argv == NULL || argc < 3) {
         snprintf(log_msg, BUFSIZE, "Invalid Arguments. %d\n", argc);
         write_log(log_msg);
-        if (argv != NULL) free_double_pointer(argv, argc);
+        if (argv != NULL)
+            free_double_pointer(argv, argc);
         return;
     }
     snprintf(log_msg, BUFSIZE, "Adding User %s:%s.\n", argv[0], argv[1]);
@@ -246,7 +295,8 @@ void proc_chmod(const int sock, char input[BUFSIZE]) {
     if (argv == NULL || argc < 2) {
         snprintf(log_msg, BUFSIZE, "Invalid Arguments. %d\n", argc);
         write_log(log_msg);
-        if (argv != NULL) free_double_pointer(argv, argc);
+        if (argv != NULL)
+            free_double_pointer(argv, argc);
         return;
     }
 
@@ -263,9 +313,11 @@ void proc_chmod(const int sock, char input[BUFSIZE]) {
     char *name_hash = sha256(argv[0]);
     // TODO: When added theads add thread_id var that will set the id val
     if ((flag = change_privileges(name_hash, priv, 0))) {
-        snprintf(log_msg, BUFSIZE, "Changed User %s Privileges Successfully.\n", argv[0]);
+        snprintf(log_msg, BUFSIZE, "Changed User %s Privileges Successfully.\n",
+                 argv[0]);
     } else {
-        snprintf(log_msg, BUFSIZE, "Could not Change User %s Privileges.\n", argv[0]);
+        snprintf(log_msg, BUFSIZE, "Could not Change User %s Privileges.\n",
+                 argv[0]);
     }
 
     flag = htonl(flag);
@@ -280,8 +332,10 @@ int read_socket(const struct user *session) {
     char buffer[BUFSIZE], log_msg[BUFSIZE];
 
     while (1) {
-        if ((len = recv_packet(session->sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
-            snprintf(log_msg, BUFSIZE, "Error receiving data. Error ID: %s\n", strerror(errno));
+        if ((len = recv_packet(session->sock, buffer, BUFSIZE)) ==
+            SOCKET_ERROR) {
+            snprintf(log_msg, BUFSIZE, "Error receiving data. Error ID: %s\n",
+                     strerror(errno));
             write_log(log_msg);
             continue;
         }
@@ -356,15 +410,17 @@ int read_socket(const struct user *session) {
     }
 }
 
-int setup() {
+int setup(char *data_path) {
     if (!auth_ready()) {
         write_log("Error Setting Up Auth.\n");
         return 0;
     }
     write_log("Auth Setup Complete.\n");
 
-    char *log_file_path = malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
-    snprintf(log_file_path, strlen(LOG_PATH) + strlen(LOG_FILE) + 1, "%s%s", LOG_PATH, LOG_FILE);
+    char *log_file_path =
+        malloc(sizeof(char) * (strlen(LOG_PATH) + strlen(LOG_FILE)) + 1);
+    snprintf(log_file_path, strlen(LOG_PATH) + strlen(LOG_FILE) + 1, "%s%s",
+             LOG_PATH, LOG_FILE);
     if (access(log_file_path, F_OK) != 0) {
         DIR *d = opendir(LOG_PATH);
         if (d == NULL) {
@@ -393,6 +449,24 @@ int setup() {
     set_log_stream(log_file);
     free(log_file_path);
 
+    char log_msg[BUFSIZE];
+    if (data_path == NULL) {
+        char *corr_path = getcwd(NULL, 0);
+        if (corr_path == NULL) {
+            snprintf(log_msg, BUFSIZE, "Couldn't Get CWD: %s", strerror(errno));
+            write_log(log_msg);
+            return 0;
+        }
+        size_t len = strlen(corr_path) + 2;
+        save_path = malloc(sizeof(*save_path) * len);
+        snprintf(save_path, len, "%s/", corr_path);
+    } else {
+        size_t len = strlen(data_path) + 2;
+        save_path = malloc(sizeof(*save_path) * len);
+        snprintf(save_path, len, "%s/", data_path);
+        free(data_path);
+    }
+
     return 1;
 }
 
@@ -402,7 +476,8 @@ unsigned int auth_user(const int sock, struct user *user_session) {
     unsigned int is_valid = htonl(INVALID_CREDS);
 
     if (recv_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
-        snprintf(hash, CRED_SIZE, "Error Receiving Hash. ID: %s\n", strerror(errno));
+        snprintf(hash, CRED_SIZE, "Error Receiving Hash. ID: %s\n",
+                 strerror(errno));
         write_log(hash);
         is_valid = htonl(0);
         send(sock, &is_valid, sizeof(int), 0);
@@ -415,15 +490,16 @@ unsigned int auth_user(const int sock, struct user *user_session) {
 
     char buffer[BUFSIZE];
     while (send(sock, &is_valid, sizeof(int), 0) == SOCKET_ERROR) {
-        snprintf(buffer, BUFSIZE, "Error Sending Auth Validation. ID: %s\n", strerror(errno));
+        snprintf(buffer, BUFSIZE, "Error Sending Auth Validation. ID: %s\n",
+                 strerror(errno));
         write_log(buffer);
     }
 
     return priv;
 }
 
-void server(char *ip, int port) {
-    if (!setup()) {
+void server(char *ip, int port, char *data_path) {
+    if (!setup(data_path)) {
         write_log("Couldn't Finish Setup.\n");
         return;
     }
@@ -460,7 +536,9 @@ void server(char *ip, int port) {
         }
 
         struct user user_session;
-        while ((user_session.privilege = auth_user(client, &user_session)) <= 0 && i < 3) {
+        while ((user_session.privilege = auth_user(client, &user_session)) <=
+                   0 &&
+               i < 3) {
             i++;
         }
         if (user_session.privilege > 0) {
@@ -474,5 +552,9 @@ void server(char *ip, int port) {
             }
         }
         close(client);
+    }
+
+    if (save_path != NULL) {
+        free(save_path);
     }
 }

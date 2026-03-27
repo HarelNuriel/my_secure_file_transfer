@@ -34,7 +34,7 @@ func startClientInstance() (*exec.Cmd, io.WriteCloser, io.ReadCloser, error) {
 }
 
 func execRmUsrTest(t *testing.T, stdin io.WriteCloser, stdout io.ReadCloser) {
-	cmd := [...]string{"admin\n", "admin\n", "rm_user test\n", "exit\n"}
+	cmd := [...]string{"admin\n", "admin\n", "rm_user test\n", "rm_user test2\n", "exit\n"}
 	reader := bufio.NewReader(stdout)
 
 	outputRoutine(t, reader, '\n', "Session started with host: 10.5.0.10\n")
@@ -49,6 +49,9 @@ func execRmUsrTest(t *testing.T, stdin io.WriteCloser, stdout io.ReadCloser) {
 	outputRoutine(t, reader, '\n', "User Removed Successfully.\n")
 	outputRoutine(t, reader, ' ', "> ")
 	sendInput(t, stdin, cmd[3])
+	outputRoutine(t, reader, '\n', "User Removed Successfully.\n")
+	outputRoutine(t, reader, ' ', "> ")
+	sendInput(t, stdin, cmd[4])
 }
 
 func newPrivTest(t *testing.T, stdin io.WriteCloser, stdout io.ReadCloser) {
