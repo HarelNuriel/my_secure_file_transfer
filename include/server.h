@@ -6,6 +6,7 @@
 #ifndef SECURE_FILE_TRANSFER_SERVER_H
 #define SECURE_FILE_TRANSFER_SERVER_H
 
+#include "RSA.h"
 #include "auth.h"
 #include "common_utils.h"
 

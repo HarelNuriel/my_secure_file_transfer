@@ -3,8 +3,6 @@
 //
 
 #include "client.h"
-#include "common_utils.h"
-#include <stdio.h>
 
 int open_client_socket(const char *ip, const int port) {
     char log_msg[BUFSIZE];
@@ -321,7 +319,7 @@ unsigned int auth(const int sock) {
     char *hash = prepare_creds(name, passwd);
 
     if (send_packet(sock, hash, CRED_SIZE) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Sending The Username. ID: %s\n",
+        snprintf(log_msg, BUFSIZE, "Error Sending The Username. ID: %s.\n",
                  strerror(errno));
         write_log(log_msg);
         free(hash);
@@ -329,13 +327,59 @@ unsigned int auth(const int sock) {
     }
 
     while (recv(sock, &is_valid, sizeof(int), 0) == SOCKET_ERROR) {
-        snprintf(log_msg, BUFSIZE, "Error Receiving Answer. ID: %s\n",
+        snprintf(log_msg, BUFSIZE, "Error Receiving Answer. ID: %s.\n",
                  strerror(errno));
         write_log(log_msg);
     }
 
     free(hash);
     return ntohl(is_valid);
+}
+
+int verify_session(struct user *session) {
+    struct key_pair sess_key;
+    char log_msg[BUFSIZE];
+    if (recv(session->sock, &sess_key, sizeof(struct key_pair), 0) ==
+        SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Receive Key Pair: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+
+    session->key.exp = sess_key.exp;
+    session->key.n = sess_key.n;
+
+    char buffer[BUFSIZE];
+    int len;
+    if ((len = recv_packet(session->sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Receive Challenge: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+
+    char *answer = decrypt(buffer, len, session->key);
+    if (send_packet(session->sock, answer, len) == SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Send Answer: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+    free(answer);
+
+    if (recv(session->sock, &len, sizeof(int), 0) == SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Receive Validation: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+
+    if (ntohl(len) == 1) {
+        return 1;
+    }
+
+    return 0;
 }
 
 void client(char *ip, int port) {
@@ -363,10 +407,13 @@ void client(char *ip, int port) {
             i++;
         }
     }
-    if (is_valid == VALID_CREDS) {
+
+    struct user c_session;
+    c_session.sock = sock;
+    if (!verify_session(&c_session)) {
+        write_log("Failed Challenge.\n");
+    } else if (is_valid == VALID_CREDS) {
         write_log("Successfully Logged In.\n");
-        struct user c_session;
-        c_session.sock = sock;
         session(&c_session);
     }
 

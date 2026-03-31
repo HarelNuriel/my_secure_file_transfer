@@ -5,6 +5,7 @@
 #ifndef MY_SECURE_FILE_TRANSFER_AUTH_H
 #define MY_SECURE_FILE_TRANSFER_AUTH_H
 
+#include "RSA.h"
 #include "common_utils.h"
 #include "sha256.h"
 
@@ -16,7 +17,7 @@
 
 int auth_ready();
 void free_auth();
-char* prepare_creds(const char *name, const char *passwd);
+char *prepare_creds(const char *name, const char *passwd);
 int validate_auth_user(const char *hash);
 int add_user(const char *hash, int privileges);
 int rm_user(const char *name_hash, int id);
@@ -24,15 +25,15 @@ int change_privileges(const char *name_hash, int privileges, int id);
 
 struct user {
     int sock;
-    unsigned long long key;
+    struct key_pair key;
     unsigned int privilege;
 };
 
-typedef  enum {
+typedef enum {
     PRIV_READ = 1,
     PRIV_WRITE = 2,
     PRIV_EDIT_USERS = 4,
     PRIV_ADMIN = 7
 } privileges;
 
-#endif //MY_SECURE_FILE_TRANSFER_AUTH_H
+#endif // MY_SECURE_FILE_TRANSFER_AUTH_H

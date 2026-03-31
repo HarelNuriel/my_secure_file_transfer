@@ -1,9 +1,10 @@
 #include "server.h"
+#include "RSA.h"
 #include "common_utils.h"
-#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/random.h>
 
 static char *save_path;
 
@@ -498,6 +499,85 @@ unsigned int auth_user(const int sock, struct user *user_session) {
     return priv;
 }
 
+char *prepare_challenge() {
+    unsigned int len;
+    getrandom(&len, sizeof(int), 0);
+    len = (len % 64) + 16;
+
+    unsigned char *challenge = calloc(len + 1, sizeof(char));
+    getrandom(challenge, len, 0);
+
+    for (int i = 0; i < len; i++) {
+        challenge[i] = (challenge[i] % 26) + 'a';
+    }
+
+    return (char *)challenge;
+}
+
+int handshake(struct user *session) {
+    char log_msg[BUFSIZE];
+    struct rsa_param user_rsa_params;
+    generate_keys(&user_rsa_params);
+    write_log("Generated Keys.\n");
+
+    struct key_pair priv_key, pub_key;
+    session->key.exp = user_rsa_params.d;
+    session->key.n = user_rsa_params.n;
+    pub_key.exp = user_rsa_params.e;
+    pub_key.n = user_rsa_params.n;
+
+    if (send(session->sock, &pub_key, sizeof(struct key_pair), 0) ==
+        SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Send Key Pair: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        return 0;
+    }
+
+    // Challenge
+    char buffer[BUFSIZE];
+    char *challenge = prepare_challenge();
+    struct enc_msg enc_challenge =
+        encrypt(challenge, strlen(challenge), session->key);
+
+    if (send_packet(session->sock, enc_challenge.msg, enc_challenge.len) ==
+        SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Send Challenge: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        free(enc_challenge.msg);
+        free(challenge);
+        return 0;
+    }
+    free(enc_challenge.msg);
+
+    int len;
+    if ((len = recv_packet(session->sock, buffer, BUFSIZE)) == SOCKET_ERROR) {
+        snprintf(log_msg, BUFSIZE, "Failed To Receive Answer: %s.\n",
+                 strerror(errno));
+        write_log(log_msg);
+        free(challenge);
+        return 0;
+    }
+
+    int has_passed = htonl(1);
+    if (strncmp(challenge, buffer, len) != 0) {
+        write_log("Client Failed Challenge.\n");
+        free(challenge);
+        has_passed = htonl(0);
+        send(session->sock, &has_passed, sizeof(int), 0);
+        return 0;
+    }
+    free(challenge);
+
+    if (send(session->sock, &has_passed, sizeof(int), 0) == SOCKET_ERROR) {
+        write_log("Failed To Send OK To The Client.\n");
+        return 0;
+    }
+
+    return 1;
+}
+
 void server(char *ip, int port, char *data_path) {
     if (!setup(data_path)) {
         write_log("Couldn't Finish Setup.\n");
@@ -543,12 +623,16 @@ void server(char *ip, int port, char *data_path) {
         }
         if (user_session.privilege > 0) {
             user_session.sock = client;
-            flag = read_socket(&user_session);
-            if (flag == -1) {
-                close_log_stream();
-                close(sock);
-                close(client);
-                break;
+            if (!handshake(&user_session)) {
+                write_log("Client Failed The Challenge.\n");
+            } else {
+                flag = read_socket(&user_session);
+                if (flag == -1) {
+                    close_log_stream();
+                    close(sock);
+                    close(client);
+                    break;
+                }
             }
         }
         close(client);
